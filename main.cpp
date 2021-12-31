@@ -8,6 +8,7 @@
 #include "MQTTmbed.h"
 #include "stm32f1xx.h"
 #include <cstdint>
+#include <cstring>
 
 #define VERSION "v01 bluepill"
 #define NODE_NUM "00" // TODO just define node number
@@ -20,7 +21,7 @@ Ticker tick_15sec;
 Ticker tick_1sec;
 Ticker tick_500ms;
 
-bool flag_check_connectivity;
+bool flag_publish_info;
 bool flag_error_message;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
@@ -34,15 +35,18 @@ Watchdog &wd = Watchdog::get_instance();
 
 uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, 0x00}; // TODO make last byte dynamic
 const char* mqtt_broker = "192.168.1.1";
+char* topic_sub = "cmnd/controller" NODE_NUM "/+";
+char* topic_pub = "stat/controller" NODE_NUM "/";
 const int mqtt_port = 1883;
 unsigned long uptime_sec = 0;
 bool connected_net = false;
 bool connected_mqtt = false;
 uint8_t conn_failures = 0;
+
 DigitalOut led(PC_13);
 
 
-void messageArrived(MQTT::MessageData& md)
+void message_handler(MQTT::MessageData& md)
 {
     // MQTT callback function
     MQTT::Message &message = md.message;
@@ -50,19 +54,30 @@ void messageArrived(MQTT::MessageData& md)
     printf("%ld: Payload: %.*s\n", uptime_sec, message.payloadlen, (char*)message.payload);
 }
 
-void publish_info(MQTT::Client<MQTTNetwork, Countdown> &client) {
+bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* msg_payload, bool retained = false) {
+    // main function to publish MQTT messages
     MQTT::Message msg;
     int8_t rc = MQTT::SUCCESS;
-    const char msg_topic[] = "bananas";
-    const char msg_payload[] = "thisisbananas";
     msg.qos = MQTT::QOS1;
-    msg.retained = false;
-    msg.dup = false;
+    msg.retained = retained;
     msg.payloadlen = strlen(msg_payload)+1;
     msg.payload = (char*)msg_payload;
-    printf("%ld: Publishing: %s to: %s\n", uptime_sec, msg.payload, msg_topic);
-    rc = client.publish(msg_topic, msg);
-    printf("%ld: publish status: %d\n", uptime_sec, rc);
+    char topic_full[30];
+    strcat(topic_full, topic_pub);
+    strcat(topic_full, topic);
+    printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
+    if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
+        printf("%ld: Publish Error! client.publish returned: %d\n", uptime_sec, rc);
+    }
+    return true;
+}
+
+bool publish_info(MQTT::Client<MQTTNetwork, Countdown> &client) {
+    // periodic mqtt info message
+    char topic[] = "uptime";
+    char message[10];
+    sprintf(message, "%ld", uptime_sec);
+    return publish(client, topic, message);
 }
 
 bool networking_init(WIZnetInterface &wiz) {
@@ -105,12 +120,11 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     }
     printf("%ld: Connected to broker %s :-)\n", uptime_sec, mqtt_broker);
     // Subscribe to topic
-    char topic[] = "cmnd/controller" NODE_NUM "/+";
-    if (client.subscribe(topic, MQTT::QOS1, messageArrived) != MQTT::SUCCESS) {
+    if (client.subscribe(topic_sub, MQTT::QOS1, message_handler) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't subscribe to topic :-(\n", uptime_sec);
         return false;
     }
-    printf("%ld: Subscribed to %s\n", uptime_sec, topic);
+    printf("%ld: Subscribed to %s\n", uptime_sec, topic_sub);
     // Node online message
     // publish_value(client, "version", VERSION, true);
     // publish_value(client, "IPAddress", wiz.getIPAddress(), true);
@@ -121,15 +135,15 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
 
 void every_30sec() {
     // no waits or blocking routines here please!
-    flag_publish_inputs = 1;
-    flag_publish_outputs = 1;
+    flag_publish_inputs = true;
+    flag_publish_outputs = true;
 }
 
 void every_15sec() {
     // no waits or blocking routines here please!
-    flag_read_dht = 1;
-    flag_read_ds1820 = 1;
-    flag_check_connectivity = 1;
+    flag_read_dht = true;
+    flag_read_ds1820 = true;
+    flag_publish_info = true;
 }
 
 void every_second() {
@@ -143,7 +157,7 @@ void every_second() {
 
 void every_500ms() {
     // no waits or blocking routines here please!
-    flag_read_inputs = 1;
+    flag_read_inputs = true;
     if(connected_net && !connected_mqtt) {
         led = !led;
     }
@@ -186,13 +200,11 @@ int main(void)
                     connected_net = false;
                     conn_failures = 0;
                 }
-                flag_check_connectivity = 0;
             }
             // network is connected
-            if(flag_check_connectivity) {
-                // do a network check
+            if(flag_publish_info) {
                 publish_info(client);
-                flag_check_connectivity = 0;
+                flag_publish_info = false;
             }
             else {
                 // we're connected, do stuff!
@@ -202,7 +214,7 @@ int main(void)
         // testSendResult = network_test();
         // printf("%ld: Net test result: %d\n", uptime_sec, testSendResult);
         connected_mqtt = client.isConnected();
-        printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
+        // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
         
         client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
     }
