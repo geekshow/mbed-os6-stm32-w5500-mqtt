@@ -549,7 +549,6 @@ int MQTT::Client<Network, Timer, a, MAX_MESSAGE_HANDLERS>::deliverMessage(MQTTSt
         defaultMessageHandler(md);
         rc = SUCCESS;
     }
-    printf("DBG: MQTT deliverMessage result: %d\n", rc);
     return rc;
 }
 
