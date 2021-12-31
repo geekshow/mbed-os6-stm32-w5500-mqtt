@@ -1,20 +1,15 @@
-#include "PinNames.h"
 #include "TCPSocketConnection.h"
-#include "Watchdog.h"
 #include "mbed.h"
 #include "WIZnetInterface.h"
 #include "MQTTClient.h"
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
-#include "stm32f1xx.h"
-#include <cstdint>
-#include <cstring>
 
 #define VERSION "v01 bluepill"
-#define NODE_NUM "00" // TODO just define node number
+#define CONTROLLER_NUM "00"
+#define CONTROLLER_NUM_DEC 0
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
-#define MQTT_DEBUG 1
 
 Ticker tick_30sec;
 Ticker tick_15sec;
@@ -22,7 +17,6 @@ Ticker tick_1sec;
 Ticker tick_500ms;
 
 bool flag_publish_info;
-bool flag_error_message;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_read_dht;
@@ -33,11 +27,11 @@ enum led_modes {LED_ON, LED_OFF};
 
 Watchdog &wd = Watchdog::get_instance();
 
-uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, 0x00}; // TODO make last byte dynamic
+uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, CONTROLLER_NUM_DEC};
 const char* mqtt_broker = "192.168.1.1";
-char* topic_sub = "cmnd/controller" NODE_NUM "/+";
-char* topic_pub = "stat/controller" NODE_NUM "/";
 const int mqtt_port = 1883;
+char* topic_sub = "cmnd/controller" CONTROLLER_NUM "/+";
+char* topic_pub = "stat/controller" CONTROLLER_NUM "/";
 unsigned long uptime_sec = 0;
 bool connected_net = false;
 bool connected_mqtt = false;
@@ -50,8 +44,8 @@ void message_handler(MQTT::MessageData& md)
 {
     // MQTT callback function
     MQTT::Message &message = md.message;
-    printf("%ld: Message arrived: qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, message.qos, message.retained, message.dup, message.id);
-    printf("%ld: Payload: %.*s\n", uptime_sec, message.payloadlen, (char*)message.payload);
+    // printf("%ld: DEBUG: Message arrived: qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, message.qos, message.retained, message.dup, message.id);
+    printf("%ld: Message arrived: %.*s\n", uptime_sec, message.payloadlen, (char*)message.payload);
 }
 
 bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* msg_payload, bool retained = false) {
@@ -65,7 +59,7 @@ bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* ms
     char topic_full[30];
     strcat(topic_full, topic_pub);
     strcat(topic_full, topic);
-    printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
+    // printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
     if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
         printf("%ld: Publish Error! client.publish returned: %d\n", uptime_sec, rc);
     }
@@ -92,19 +86,9 @@ bool networking_init(WIZnetInterface &wiz) {
     return true;
 }
 
-int network_test() {
-    // check net connection
-    TCPSocketConnection testSock;
-    testSock.connect("192.168.1.170", 5555);
-    return testSock.send((char*)".", 1);
-}
-
 int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &client) {
-    //close old connection
-    // rc = mqttNet.disconnect();
-    // printf("%ld: MQTT Disconnect error: %d", uptime_sec, rc);
     // TCP connect to broker
-    printf("%ld: Connecting to broker...\n", uptime_sec);
+    printf("%ld: Connecting to MQTT broker...\n", uptime_sec);
     if (mqttNet.connect((char*)mqtt_broker, mqtt_port) != MQTT::SUCCESS) {
         printf("%ld: Couldn't connect TCP socket to broker %s :-(\n", uptime_sec, mqtt_broker);
         conn_failures++;  // record this as a connection failure in case we need to reset the Wiznet
@@ -112,7 +96,7 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     }
     // Client connect to broker
     MQTTPacket_connectData conn_data = MQTTPacket_connectData_initializer;
-    conn_data.clientID.cstring = (char*)"controller" NODE_NUM;
+    conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
         conn_failures++;  // record this as a connection failure in case we need to reset the Wiznet
@@ -126,8 +110,8 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     }
     printf("%ld: Subscribed to %s\n", uptime_sec, topic_sub);
     // Node online message
-    // publish_value(client, "version", VERSION, true);
-    // publish_value(client, "IPAddress", wiz.getIPAddress(), true);
+    publish(client, "version", VERSION, true);
+    publish(client, "IPAddress", mqttNet.getIPAddress(), true);
     conn_failures = 0;   // remember to reset this on success
     return true;
 } 
@@ -168,7 +152,7 @@ int main(void)
 {
     wd.start(WATCHDOG_TIMEOUT_MS);
 
-    printf("%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
+    printf("\n===============\n%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
     WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
     MQTTNetwork mqttNetwork(&wiz);
@@ -180,8 +164,6 @@ int main(void)
     tick_30sec.attach(&every_30sec, 29.5);
 
     wd.kick();
-
-    int testSendResult = 0;
 
     while(1) {
 
@@ -210,9 +192,6 @@ int main(void)
                 // we're connected, do stuff!
             }
         }
-        // printf("%ld: Sleeping...\n", uptime_sec);
-        // testSendResult = network_test();
-        // printf("%ld: Net test result: %d\n", uptime_sec, testSendResult);
         connected_mqtt = client.isConnected();
         // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
         

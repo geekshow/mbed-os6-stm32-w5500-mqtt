@@ -25,6 +25,10 @@ public:
     int connect(const char* hostname, int port) {
         return socket->connect(hostname, port);
     }
+
+    char* getIPAddress() {
+        return network->getIPAddress();
+    }
  
     int disconnect() {
         return socket->close();
