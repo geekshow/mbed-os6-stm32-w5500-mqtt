@@ -32,6 +32,7 @@ const char* mqtt_broker = "192.168.1.1";
 const int mqtt_port = 1883;
 char* topic_sub = "cmnd/controller" CONTROLLER_NUM "/+";
 char* topic_pub = "stat/controller" CONTROLLER_NUM "/";
+char* topic_lwt = "stat/controller" CONTROLLER_NUM "/online";
 unsigned long uptime_sec = 0;
 bool connected_net = false;
 bool connected_mqtt = false;
@@ -51,7 +52,6 @@ void message_handler(MQTT::MessageData& md)
 bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* msg_payload, bool retained = false) {
     // main function to publish MQTT messages
     MQTT::Message msg;
-    int8_t rc = MQTT::SUCCESS;
     msg.qos = MQTT::QOS1;
     msg.retained = retained;
     msg.payloadlen = strlen(msg_payload)+1;
@@ -61,9 +61,15 @@ bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* ms
     strcat(topic_full, topic);
     // printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
     if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
-        printf("%ld: Publish Error! client.publish returned: %d\n", uptime_sec, rc);
+        printf("%ld: Publish Error! (topic:%s msg:%s)\n", uptime_sec, topic, msg_payload);
     }
     return true;
+}
+
+bool publish_num(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, int num, bool retained = false) {
+    char message[10];
+    sprintf(message, "%d", num);
+    return publish(client, topic, message, retained);
 }
 
 bool publish_info(MQTT::Client<MQTTNetwork, Countdown> &client) {
@@ -96,6 +102,12 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     }
     // Client connect to broker
     MQTTPacket_connectData conn_data = MQTTPacket_connectData_initializer;
+    MQTTPacket_willOptions lwt = MQTTPacket_willOptions_initializer;
+    lwt.topicName.cstring = topic_lwt;
+    lwt.message.cstring = (char*)"0";
+    lwt.retained = true;
+    conn_data.willFlag = 1;
+    conn_data.will = lwt;
     conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
@@ -112,6 +124,7 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     // Node online message
     publish(client, "version", VERSION, true);
     publish(client, "IPAddress", mqttNet.getIPAddress(), true);
+    publish_num(client, "online", 1, true);
     conn_failures = 0;   // remember to reset this on success
     return true;
 } 
