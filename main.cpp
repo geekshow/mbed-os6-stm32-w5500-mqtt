@@ -44,8 +44,8 @@ uint8_t conn_failures = 0;
 #define NUM_INPUTS 13
 DigitalIn inputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 11
-DigitalOut outputs[] = {PC_14, PC_15, PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
+#define NUM_OUTPUTS 10
+DigitalOut outputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0, PB_1};
 DigitalOut led(PC_13);
 
 
@@ -191,7 +191,7 @@ int main(void)
 
     printf("\n===============\n%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
     printf("%ld: Inputs: %d Outputs: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS);
-    WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_1); // SPI2 with PB_11 reset
+    WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
     MQTTNetwork mqttNetwork(&wiz);
     MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
@@ -207,7 +207,6 @@ int main(void)
     }
     //pulse all outputs
     for(int i=0; i<NUM_OUTPUTS; i++) {
-        printf("%ld: DEBUG: turning output %d off\n", uptime_sec, i);
         outputs[i] = IO_OFF;
         thread_sleep_for(200);
     }
