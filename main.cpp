@@ -41,12 +41,12 @@ bool connected_net = false;
 bool connected_mqtt = false;
 uint8_t conn_failures = 0;
 
-DigitalOut led(PC_13);
 #define NUM_INPUTS 13
 DigitalIn inputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 12
-DigitalOut outputs[] = {PC_14, PC_15, PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0, PB_1};
+#define NUM_OUTPUTS 11
+DigitalOut outputs[] = {PC_14, PC_15, PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
+DigitalOut led(PC_13);
 
 
 void message_handler(MQTT::MessageData& md)
@@ -100,7 +100,7 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
     for (int i=0; i<NUM_OUTPUTS; i++) {
         char topic_str[9]; // long enough string for outputxx
         sprintf(topic_str, "output%d", i);
-        publish_num(client, topic_str, !outputs[i]);
+        publish_num(client, topic_str, !outputs[i].read());
     }
 }
 
@@ -190,8 +190,8 @@ int main(void)
     wd.start(WATCHDOG_TIMEOUT_MS);
 
     printf("\n===============\n%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
-    printf("", uptime_sec);
-    WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
+    printf("%ld: Inputs: %d Outputs: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS);
+    WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_1); // SPI2 with PB_11 reset
 
     MQTTNetwork mqttNetwork(&wiz);
     MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
@@ -207,6 +207,7 @@ int main(void)
     }
     //pulse all outputs
     for(int i=0; i<NUM_OUTPUTS; i++) {
+        printf("%ld: DEBUG: turning output %d off\n", uptime_sec, i);
         outputs[i] = IO_OFF;
         thread_sleep_for(200);
     }
