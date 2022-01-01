@@ -1,15 +1,19 @@
+#include "DigitalIn.h"
+#include "InterfaceDigitalOut.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
 #include "WIZnetInterface.h"
 #include "MQTTClient.h"
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
+#include "mbed_thread.h"
 
 #define VERSION "v01 bluepill"
 #define CONTROLLER_NUM "00"
 #define CONTROLLER_NUM_DEC 0
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
+#define MQTT_KEEPALIVE 15
 
 Ticker tick_30sec;
 Ticker tick_15sec;
@@ -20,10 +24,9 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_read_dht;
-bool flag_read_inputs;
 bool flag_read_ds1820;
 
-enum led_modes {LED_ON, LED_OFF};
+enum IO_state {IO_ON, IO_OFF};
 
 Watchdog &wd = Watchdog::get_instance();
 
@@ -39,6 +42,11 @@ bool connected_mqtt = false;
 uint8_t conn_failures = 0;
 
 DigitalOut led(PC_13);
+#define NUM_INPUTS 13
+DigitalIn inputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
+bool input_state[NUM_INPUTS];
+#define NUM_OUTPUTS 12
+DigitalOut outputs[] = {PC_14, PC_15, PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0, PB_1};
 
 
 void message_handler(MQTT::MessageData& md)
@@ -80,6 +88,22 @@ bool publish_info(MQTT::Client<MQTTNetwork, Countdown> &client) {
     return publish(client, topic, message);
 }
 
+void publish_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
+    for (int i=0; i<NUM_INPUTS; i++) {
+        char topic_str[8]; // long enough string for inputxx
+        sprintf(topic_str, "input%d", i);
+        publish_num(client, topic_str, input_state[i]);
+    }
+}
+
+void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
+    for (int i=0; i<NUM_OUTPUTS; i++) {
+        char topic_str[9]; // long enough string for outputxx
+        sprintf(topic_str, "output%d", i);
+        publish_num(client, topic_str, !outputs[i]);
+    }
+}
+
 bool networking_init(WIZnetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
@@ -108,6 +132,7 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     lwt.retained = true;
     conn_data.willFlag = 1;
     conn_data.will = lwt;
+    conn_data.keepAliveInterval = MQTT_KEEPALIVE;
     conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
@@ -154,7 +179,6 @@ void every_second() {
 
 void every_500ms() {
     // no waits or blocking routines here please!
-    flag_read_inputs = true;
     if(connected_net && !connected_mqtt) {
         led = !led;
     }
@@ -166,6 +190,7 @@ int main(void)
     wd.start(WATCHDOG_TIMEOUT_MS);
 
     printf("\n===============\n%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
+    printf("", uptime_sec);
     WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
     MQTTNetwork mqttNetwork(&wiz);
@@ -176,13 +201,23 @@ int main(void)
     tick_15sec.attach(&every_15sec, 15.1);
     tick_30sec.attach(&every_30sec, 29.5);
 
+    // pull high all inputs
+    for(int i=0; i<NUM_INPUTS; i++) {
+        inputs[i].mode(PullUp);
+    }
+    //pulse all outputs
+    for(int i=0; i<NUM_OUTPUTS; i++) {
+        outputs[i] = IO_OFF;
+        thread_sleep_for(200);
+    }
+    
     wd.kick();
 
     while(1) {
 
         if(!connected_net) {
             // network isn't connected
-            led = LED_OFF;
+            led = IO_OFF;
             connected_mqtt = false;   // if we've no net connection, mqtt ain't connected either
             connected_net = networking_init(wiz);
         }
@@ -196,13 +231,18 @@ int main(void)
                     conn_failures = 0;
                 }
             }
-            // network is connected
-            if(flag_publish_info) {
+            // we're connected, do stuff!
+            else if(flag_publish_info) {
                 publish_info(client);
                 flag_publish_info = false;
             }
-            else {
-                // we're connected, do stuff!
+            else if (flag_publish_inputs) {
+                publish_inputs(client);
+                flag_publish_inputs = false;
+            }
+            else if (flag_publish_outputs) {
+                publish_outputs(client);
+                flag_publish_outputs = false;
             }
         }
         connected_mqtt = client.isConnected();
