@@ -41,11 +41,11 @@ bool connected_net = false;
 bool connected_mqtt = false;
 uint8_t conn_failures = 0;
 
-#define NUM_INPUTS 13
-DigitalIn inputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
+#define NUM_INPUTS 10
+DigitalOut inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0, PB_1};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 10
-DigitalOut outputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0, PB_1};
+#define NUM_OUTPUTS 13
+DigitalIn outputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
 
 
