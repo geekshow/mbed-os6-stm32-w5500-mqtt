@@ -1,5 +1,3 @@
-#include "DigitalIn.h"
-#include "InterfaceDigitalOut.h"
 #include "TCPSocketConnection.h"
 #include "ThisThread.h"
 #include "mbed.h"
@@ -35,6 +33,7 @@ uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, CONTROLLER_NUM_DEC};
 const char* mqtt_broker = "192.168.1.1";
 const int mqtt_port = 1883;
 char* topic_sub = "cmnd/controller" CONTROLLER_NUM "/+";
+char* topic_cmnd = "cmnd/controller" CONTROLLER_NUM "/";
 char* topic_pub = "stat/controller" CONTROLLER_NUM "/";
 char* topic_lwt = "stat/controller" CONTROLLER_NUM "/online";
 unsigned long uptime_sec = 0;
@@ -54,8 +53,31 @@ void message_handler(MQTT::MessageData& md)
 {
     // MQTT callback function
     MQTT::Message &message = md.message;
-    // printf("%ld: DEBUG: Message arrived: qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, message.qos, message.retained, message.dup, message.id);
-    printf("%ld: Message arrived: %.*s\n", uptime_sec, message.payloadlen, (char*)message.payload);
+    char topic[md.topicName.lenstring.len + 1];
+    sprintf(topic, "%.*s", md.topicName.lenstring.len, md.topicName.lenstring.data);
+    char* payload = new char[message.payloadlen + 1];
+    sprintf(payload, "%.*s", message.payloadlen, (char*)message.payload);
+    printf("%ld: DEBUG: Received: %s Msg: %s qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, topic, payload, message.qos, message.retained, message.dup, message.id);
+    char* sub_topic = topic + strlen(topic_cmnd);  // find the last word of the topic (eg: cmnd/controller00/output2)
+    if (!strncmp(sub_topic, "output", 6)) {
+        // output# command received
+        char* output_num_str = sub_topic + 6;
+        int8_t output_num = atoi(output_num_str);
+        if (output_num < 0 || output_num >= NUM_OUTPUTS) {
+            printf("%ld: Error: unknown output number: %d\n", uptime_sec, output_num);
+            return;
+        }
+        if (!strncmp(payload, "1", 1)) {
+            outputs[output_num] = 1;
+        }
+        else if (!strncmp(payload, "0", 1)) {
+            outputs[output_num] = 0;
+        }
+        else {
+            printf("%ld: Error: unknown output command: %s\n", uptime_sec, payload);
+            return;
+        }
+    }
 }
 
 bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* msg_payload, bool retained = false) {
