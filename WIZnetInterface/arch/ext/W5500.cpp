@@ -203,7 +203,6 @@ int WIZnet_Chip::wait_readable(int socket, int wait_time_ms, int req_size)
     if (socket < 0) {
         return -1;
     }
-    printf("DBG: wait_readable waiting for %dms\n", wait_time_ms);
     Timer t;
     t.reset();
     t.start();
