@@ -1,6 +1,7 @@
 #include "DigitalIn.h"
 #include "InterfaceDigitalOut.h"
 #include "TCPSocketConnection.h"
+#include "ThisThread.h"
 #include "mbed.h"
 #include "WIZnetInterface.h"
 #include "MQTTClient.h"
@@ -13,7 +14,7 @@
 #define CONTROLLER_NUM_DEC 0
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
-#define MQTT_KEEPALIVE 15
+#define MQTT_KEEPALIVE 20
 
 Ticker tick_30sec;
 Ticker tick_15sec;
@@ -70,6 +71,7 @@ bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* ms
     // printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
     if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
         printf("%ld: Publish Error! (topic:%s msg:%s)\n", uptime_sec, topic, msg_payload);
+        return false;
     }
     return true;
 }
@@ -100,7 +102,21 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
     for (int i=0; i<NUM_OUTPUTS; i++) {
         char topic_str[9]; // long enough string for outputxx
         sprintf(topic_str, "output%d", i);
-        publish_num(client, topic_str, !outputs[i].read());
+        publish_num(client, topic_str, outputs[i]);
+    }
+}
+
+void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
+    for (int i=0; i<NUM_INPUTS; i++) {
+        bool old_state = input_state[i];    // save old state
+        input_state[i] = inputs[i];         // read new value
+        if(input_state[i] != old_state) {
+            // input has changed state
+            printf("%ld: Input %d changed to %d\n", uptime_sec, i, input_state[i]);
+            char topic_str[8]; // long enough string for inputxx
+            sprintf(topic_str, "input%d", i);
+            publish_num(client, topic_str, input_state[i]);
+        }
     }
 }
 
@@ -116,7 +132,7 @@ bool networking_init(WIZnetInterface &wiz) {
     return true;
 }
 
-int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &client) {
+bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &client) {
     // TCP connect to broker
     printf("%ld: Connecting to MQTT broker...\n", uptime_sec);
     if (mqttNet.connect((char*)mqtt_broker, mqtt_port) != MQTT::SUCCESS) {
@@ -132,6 +148,7 @@ int8_t mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &cli
     lwt.retained = true;
     conn_data.willFlag = 1;
     conn_data.will = lwt;
+    conn_data.MQTTVersion = 3;
     conn_data.keepAliveInterval = MQTT_KEEPALIVE;
     conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
@@ -165,12 +182,12 @@ void every_15sec() {
     // no waits or blocking routines here please!
     flag_read_dht = true;
     flag_read_ds1820 = true;
-    flag_publish_info = true;
 }
 
 void every_second() {
     // no waits or blocking routines here please!
     uptime_sec++;
+    flag_publish_info = true;
     if(connected_mqtt) {
         led = !led;
     }
@@ -207,7 +224,11 @@ int main(void)
     }
     //pulse all outputs
     for(int i=0; i<NUM_OUTPUTS; i++) {
-        outputs[i] = IO_OFF;
+        outputs[i] = 1;
+        thread_sleep_for(200);
+    }
+    for(int i=0; i<NUM_OUTPUTS; i++) {
+        outputs[i] = 0;
         thread_sleep_for(200);
     }
     
@@ -224,30 +245,34 @@ int main(void)
         else {
             if(!connected_mqtt) {
                 // not connected to broker
-                mqtt_init(mqttNetwork, client);
+                connected_mqtt = mqtt_init(mqttNetwork, client);
                 if (conn_failures > 3) {      // wiznet could be bad, re-initialise
                     printf("%ld: Too many connection failures! Resetting wiznet...\n", uptime_sec);
                     connected_net = false;
                     conn_failures = 0;
                 }
             }
-            // we're connected, do stuff!
-            else if(flag_publish_info) {
-                publish_info(client);
-                flag_publish_info = false;
+            else {
+                // we're connected, do stuff!
+                read_inputs(client);
+                if(flag_publish_info) {
+                    publish_info(client);
+                    flag_publish_info = false;
+                }
+                else if (flag_publish_inputs) {
+                    publish_inputs(client);
+                    flag_publish_inputs = false;
+                }
+                else if (flag_publish_outputs) {
+                    publish_outputs(client);
+                    flag_publish_outputs = false;
+                }
+                connected_mqtt = client.isConnected();
             }
-            else if (flag_publish_inputs) {
-                publish_inputs(client);
-                flag_publish_inputs = false;
-            }
-            else if (flag_publish_outputs) {
-                publish_outputs(client);
-                flag_publish_outputs = false;
-            }
-        }
-        connected_mqtt = client.isConnected();
-        // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
+            // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
         
-        client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
+            client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
+        }
+        ThisThread::sleep_for(LOOP_SLEEP_MS);
     }
 }
