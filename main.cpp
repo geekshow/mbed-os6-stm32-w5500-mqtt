@@ -167,6 +167,8 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     publish(client, "version", VERSION, true);
     publish(client, "IPAddress", mqttNet.getIPAddress(), true);
     publish_num(client, "online", 1, true);
+    publish_num(client, "inputs", NUM_INPUTS, true);
+    publish_num(client, "outputs", NUM_OUTPUTS, true);
     conn_failures = 0;   // remember to reset this on success
     return true;
 } 
