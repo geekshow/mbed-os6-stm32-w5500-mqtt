@@ -1,5 +1,4 @@
 #include "TCPSocketConnection.h"
-#include "ThisThread.h"
 #include "mbed.h"
 #include "EthernetInterface.h"
 #include "MQTTClient.h"
@@ -7,7 +6,7 @@
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
 
-#define VERSION "v01 bluepill"
+#define VERSION "v01 simple IO SSR bluepill"
 #define CONTROLLER_NUM "00"
 #define CONTROLLER_NUM_DEC 0
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -57,7 +56,7 @@ void message_handler(MQTT::MessageData& md)
     sprintf(topic, "%.*s", md.topicName.lenstring.len, md.topicName.lenstring.data);
     char* payload = new char[message.payloadlen + 1];
     sprintf(payload, "%.*s", message.payloadlen, (char*)message.payload);
-    printf("%ld: DEBUG: Received: %s Msg: %s qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, topic, payload, message.qos, message.retained, message.dup, message.id);
+    // printf("%ld: DEBUG: Received: %s Msg: %s qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, topic, payload, message.qos, message.retained, message.dup, message.id);
     char* sub_topic = topic + strlen(topic_cmnd);  // find the last word of the topic (eg: cmnd/controller00/output2)
     if (!strncmp(sub_topic, "output", 6)) {
         // output# command received
@@ -68,10 +67,14 @@ void message_handler(MQTT::MessageData& md)
             return;
         }
         if (!strncmp(payload, "1", 1)) {
+            printf("%ld: Turning output %d ON\n", uptime_sec, output_num);
             outputs[output_num] = 1;
+            flag_publish_outputs = true;
         }
         else if (!strncmp(payload, "0", 1)) {
+            printf("%ld: Turning output %d OFF\n", uptime_sec, output_num);
             outputs[output_num] = 0;
+            flag_publish_outputs = true;
         }
         else {
             printf("%ld: Error: unknown output command: %s\n", uptime_sec, payload);
