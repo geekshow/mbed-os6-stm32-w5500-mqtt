@@ -88,7 +88,7 @@ bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* ms
     MQTT::Message msg;
     msg.qos = MQTT::QOS1;
     msg.retained = retained;
-    msg.payloadlen = strlen(msg_payload)+1;
+    msg.payloadlen = strlen(msg_payload);
     msg.payload = (char*)msg_payload;
     char topic_full[30];
     strcat(topic_full, topic_pub);
