@@ -3,7 +3,7 @@
 #include "TCPSocketConnection.h"
 #include "ThisThread.h"
 #include "mbed.h"
-#include "WIZnetInterface.h"
+#include "EthernetInterface.h"
 #include "MQTTClient.h"
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
@@ -120,7 +120,7 @@ void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
     }
 }
 
-bool networking_init(WIZnetInterface &wiz) {
+bool networking_init(EthernetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
     wiz.init(mac_addr);
@@ -182,12 +182,12 @@ void every_15sec() {
     // no waits or blocking routines here please!
     flag_read_dht = true;
     flag_read_ds1820 = true;
+    flag_publish_info = true;
 }
 
 void every_second() {
     // no waits or blocking routines here please!
     uptime_sec++;
-    flag_publish_info = true;
     if(connected_mqtt) {
         led = !led;
     }
@@ -208,7 +208,7 @@ int main(void)
 
     printf("\n===============\n%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
     printf("%ld: Inputs: %d Outputs: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS);
-    WIZnetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
+    EthernetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
     MQTTNetwork mqttNetwork(&wiz);
     MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
@@ -221,15 +221,16 @@ int main(void)
     // pull high all inputs
     for(int i=0; i<NUM_INPUTS; i++) {
         inputs[i].mode(PullUp);
+        input_state[i] = 1;
     }
     //pulse all outputs
     for(int i=0; i<NUM_OUTPUTS; i++) {
         outputs[i] = 1;
-        thread_sleep_for(200);
+        thread_sleep_for(100);
     }
     for(int i=0; i<NUM_OUTPUTS; i++) {
         outputs[i] = 0;
-        thread_sleep_for(200);
+        thread_sleep_for(100);
     }
     
     wd.kick();
