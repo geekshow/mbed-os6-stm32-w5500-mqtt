@@ -2,11 +2,11 @@
 #define _MQTTNETWORK_H_
  
 #include "TCPSocketConnection.h"
-#include "WIZnetInterface.h"
+#include "EthernetInterface.h"
  
 class MQTTNetwork {
 public:
-    MQTTNetwork(WIZnetInterface* aNetwork) : network(aNetwork) {
+    MQTTNetwork(EthernetInterface* aNetwork) : network(aNetwork) {
         socket = new TCPSocketConnection();
     }
  
@@ -35,7 +35,7 @@ public:
     }
  
 private:
-    WIZnetInterface* network;
+    EthernetInterface* network;
     TCPSocketConnection* socket;
 };
  
