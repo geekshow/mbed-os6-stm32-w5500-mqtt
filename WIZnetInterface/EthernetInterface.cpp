@@ -36,7 +36,6 @@ EthernetInterface::EthernetInterface(SPI* spi, PinName cs, PinName reset) :
 int EthernetInterface::init()
 {
     dhcp = true;
-    reset();
 	
     return 0;
 }
@@ -47,7 +46,6 @@ int EthernetInterface::init(uint8_t * mac)
     //
     for (int i =0; i < 6; i++) this->mac[i] = mac[i];
     //
-    reset();
     setmac();
 	
     return 0;
@@ -64,7 +62,6 @@ int EthernetInterface::init(uint8_t * mac, const char* ip, const char* mask, con
     ip_set = true;
     this->netmask = str_to_ip(mask);
     this->gateway = str_to_ip(gateway);
-    reset();
 
     // @Jul. 8. 2014 add code. should be called to write chip.
     setmac();

@@ -52,6 +52,7 @@ WIZnet_Chip::WIZnet_Chip(PinName mosi, PinName miso, PinName sclk, PinName _cs, 
     cs(_cs), reset_pin(_reset)
 {
     spi = new SPI(mosi, miso, sclk);
+    reset();
     cs = 1;
     reset_pin = 1;
     inst = this;
@@ -62,6 +63,7 @@ WIZnet_Chip::WIZnet_Chip(SPI* spi, PinName _cs, PinName _reset):
     cs(_cs), reset_pin(_reset)
 {
     this->spi = spi;
+    reset();
     cs = 1;
     reset_pin = 1;
     inst = this;
