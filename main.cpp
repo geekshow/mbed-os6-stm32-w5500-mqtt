@@ -8,7 +8,7 @@
 
 #define VERSION "v01 simple IO SSR bluepill"
 #define CONTROLLER_NUM "99"
-#define CONTROLLER_NUM_DEC 99
+#define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
@@ -28,7 +28,7 @@ enum IO_state {IO_ON, IO_OFF};
 
 Watchdog &wd = Watchdog::get_instance();
 
-uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, CONTROLLER_NUM_DEC};
+uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, CONTROLLER_NUM_HEX};
 const char* mqtt_broker = "192.168.1.1";
 const int mqtt_port = 1883;
 char* topic_sub = "cmnd/controller" CONTROLLER_NUM "/+";
