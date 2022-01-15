@@ -7,8 +7,8 @@
 #include "mbed_thread.h"
 
 #define VERSION "v01 simple IO SSR bluepill"
-#define CONTROLLER_NUM "00"
-#define CONTROLLER_NUM_DEC 0
+#define CONTROLLER_NUM "99"
+#define CONTROLLER_NUM_DEC 99
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
@@ -233,7 +233,8 @@ int main(void)
 {
     wd.start(WATCHDOG_TIMEOUT_MS);
 
-    printf("\n===============\n%ld: Welcome! Ver: %s\n", uptime_sec, VERSION);
+    printf("\n===============\n%ld: Welcome! Name: Controller%s\n", uptime_sec, CONTROLLER_NUM);
+    printf("%ld: Version: %s\n===============\n", uptime_sec, VERSION);
     printf("%ld: Inputs: %d Outputs: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS);
     EthernetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
