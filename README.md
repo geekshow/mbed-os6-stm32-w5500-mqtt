@@ -17,4 +17,13 @@ https://os.mbed.com/users/hudakz/code/mbed-os-bluepill/
 
 ## BluePill board (STM32F103C8)
 
+Normal variant uses a mix of inputs, outputs and temperature sensing (DS18B20).
+
+### Pins
+
+- PC_13 is the green LED output (used to indicate online/offline status)
+- PC_14 and PC_15 cannot be used (linked to micro crystal)
+- PA_0 - PB_1 (left) pins are DigitalIn inputs
+- PB_9 - PA_8 (right) pins are DigitalOut outputs
+
 ![board-pinout](bluepill.png)
