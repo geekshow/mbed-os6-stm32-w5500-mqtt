@@ -8,6 +8,12 @@ Based on the BluePill (STM32F103C8) support for mbed os:
 
 https://os.mbed.com/users/hudakz/code/mbed-os-bluepill/
 
-# To Do
+## To Do
 
-- 
+- add DS18B temp
+- add i2c OLED
+- add rotational encoder
+
+## BluePill board (STM32F103C8)
+
+![board-pinout](bluepill.png)
