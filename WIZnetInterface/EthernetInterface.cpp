@@ -48,6 +48,7 @@ int EthernetInterface::init(uint8_t * mac)
     for (int i =0; i < 6; i++) this->mac[i] = mac[i];
     //
     reset();
+    setmac();
 	
     return 0;
 }
