@@ -11,6 +11,7 @@ https://os.mbed.com/users/hudakz/code/mbed-os-bluepill/
 ## To Do
 
 - add DS18B temp
+- decrease loop timeout if required
 - add i2c OLED
 - add rotational encoder
 
