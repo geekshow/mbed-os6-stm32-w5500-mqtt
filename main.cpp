@@ -7,9 +7,9 @@
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
 
-#define VERSION "v01 simple IO SSR bluepill"
-#define CONTROLLER_NUM "99"
-#define CONTROLLER_NUM_HEX 0x99
+#define VERSION "v02 IO DS1820 SSR bluepill"
+#define CONTROLLER_NUM "00"
+#define CONTROLLER_NUM_HEX 0x00
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
