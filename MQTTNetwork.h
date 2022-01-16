@@ -15,7 +15,7 @@ public:
     }
  
     int read(unsigned char* buffer, int len, int timeout) {
-        return socket->receive((char*)buffer, len);
+        return socket->receive((char*)buffer, len, timeout);
     }
  
     int write(unsigned char* buffer, int len, int timeout) {

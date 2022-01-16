@@ -102,12 +102,12 @@ int TCPSocketConnection::send_all(char* data, int length)
 }
 
 // -1 if unsuccessful, else number of bytes received
-int TCPSocketConnection::receive(char* data, int length)
+int TCPSocketConnection::receive(char* data, int length, int timeout)
 {
 	if((_sock_fd<0) || !(eth->is_connected(_sock_fd)))
 		return -1;
 
-    int size = eth->wait_readable(_sock_fd, _blocking ? -1 : _timeout);
+    int size = eth->wait_readable(_sock_fd, _blocking ? -1 : timeout);
     if (size < 0) {
         return 0;
     }

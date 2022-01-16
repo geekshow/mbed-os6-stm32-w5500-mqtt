@@ -64,11 +64,12 @@ public:
     \param length The maximum length of the buffer.
     \return the number of received bytes on success (>=0) or -1 on failure
      */
-    int receive(char* data, int length);
+    int receive(char* data, int length, int timeout);
     
     /** Receive all the data from the remote host.
     \param data The buffer in which to store the data received from the host.
     \param length The maximum length of the buffer.
+    \param timeout Max timeout in ms.
     \return the number of received bytes on success (>=0) or -1 on failure
     */
     int receive_all(char* data, int length);
