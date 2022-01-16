@@ -1,3 +1,4 @@
+#include "DS1820.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
 #include "EthernetInterface.h"
@@ -12,6 +13,7 @@
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
+#define MAX_DS1820 9
 
 Ticker tick_30sec;
 Ticker tick_15sec;
@@ -21,7 +23,6 @@ Ticker tick_500ms;
 bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
-bool flag_read_dht;
 bool flag_read_ds1820;
 
 enum IO_state {IO_ON, IO_OFF};
@@ -40,12 +41,16 @@ bool connected_net = false;
 bool connected_mqtt = false;
 uint8_t conn_failures = 0;
 
-#define NUM_INPUTS 10
-DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0, PB_1};
+#define NUM_INPUTS 9
+DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
 bool input_state[NUM_INPUTS];
 #define NUM_OUTPUTS 13
 DigitalOut outputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
+
+DS1820* temp_probe[MAX_DS1820];
+#define DS1820_DATA_PIN PB_1
+int num_ds1820 = 0;
 
 
 void message_handler(MQTT::MessageData& md)
@@ -145,6 +150,26 @@ void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
     }
 }
 
+void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
+    char temp_str[6];
+    char topic_str[12];
+    // Start temperature conversion of all probes, wait until ready
+    temp_probe[0]->convertTemperature(true, DS1820::all_devices);
+    // loop through all devices and publish temp
+    for (int i = 0; i<num_ds1820; i++) {
+        float temp_ds = temp_probe[i]->temperature();
+        if (temp_ds == DS1820::invalid_conversion) {
+            printf("%ld: DS1820 %d failed temperature conversion :-(\n", uptime_sec, i);
+            return;
+        }
+        // convert to string and publish
+        sprintf(temp_str, "%3.2f", temp_ds);
+        sprintf(topic_str, "probetemp%d", i);
+        printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
+        publish(client, topic_str, temp_str, false);
+    }
+}
+
 bool networking_init(EthernetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
@@ -194,6 +219,7 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     publish_num(client, "online", 1, true);
     publish_num(client, "inputs", NUM_INPUTS, true);
     publish_num(client, "outputs", NUM_OUTPUTS, true);
+    publish_num(client, "ds1820", num_ds1820, true);
     conn_failures = 0;   // remember to reset this on success
     return true;
 } 
@@ -207,7 +233,6 @@ void every_30sec() {
 
 void every_15sec() {
     // no waits or blocking routines here please!
-    flag_read_dht = true;
     flag_read_ds1820 = true;
     flag_publish_info = true;
 }
@@ -260,6 +285,16 @@ int main(void)
         outputs[i] = 0;
         thread_sleep_for(100);
     }
+
+    // Initialize DS1820 probe array
+    while(DS1820::unassignedProbe(DS1820_DATA_PIN)) {
+        temp_probe[num_ds1820] = new DS1820(DS1820_DATA_PIN);
+        num_ds1820++;
+        if (num_ds1820 == MAX_DS1820) {
+            break;
+        }
+    }
+    printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
     
     wd.kick();
 
@@ -295,6 +330,10 @@ int main(void)
                 else if (flag_publish_outputs) {
                     publish_outputs(client);
                     flag_publish_outputs = false;
+                }
+                else if (flag_read_ds1820) {
+                    read_ds1820(client);
+                    flag_read_ds1820 = false;
                 }
                 connected_mqtt = client.isConnected();
             }
