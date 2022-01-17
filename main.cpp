@@ -229,11 +229,11 @@ void every_30sec() {
     // no waits or blocking routines here please!
     flag_publish_inputs = true;
     flag_publish_outputs = true;
+    flag_read_ds1820 = true;
 }
 
 void every_15sec() {
     // no waits or blocking routines here please!
-    flag_read_ds1820 = true;
     flag_publish_info = true;
 }
 
