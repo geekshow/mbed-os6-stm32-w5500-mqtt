@@ -162,6 +162,10 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
             printf("%ld: DS1820 %d failed temperature conversion :-(\n", uptime_sec, i);
             return;
         }
+        else if (temp_ds == -0.25) {
+            printf("%ld: DS1820 %d bad temp (likely not connected) :-(\n", uptime_sec, i);
+            return;
+        }
         // convert to string and publish
         sprintf(temp_str, "%3.2f", temp_ds);
         sprintf(topic_str, "probetemp%d", i);
