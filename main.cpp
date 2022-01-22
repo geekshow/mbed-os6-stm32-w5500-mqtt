@@ -361,6 +361,7 @@ int main(void)
                 else if (wheel_button_pushed) {
                     printf("%ld: Wheel button pushed\n", uptime_sec);
                     publish_num(client, (char*)"button", 1);
+                    publish_num(client, (char*)"button", 0);
                     wheel_button_pushed = false;
                 }
                 else if (wheel_rotated) {
