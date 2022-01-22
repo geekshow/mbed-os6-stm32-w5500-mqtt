@@ -7,12 +7,13 @@
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
+#include "mbed_version.h"
 
 #define VERSION "v01 encoder example"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
-#define LOOP_SLEEP_MS 299
+#define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
 #define MAX_DS1820 9
 
@@ -25,6 +26,9 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_read_ds1820;
+bool wheel_button_pushed;
+bool wheel_rotated;
+int wheel_rotated_by;
 
 enum IO_state {IO_ON, IO_OFF};
 
@@ -53,6 +57,14 @@ DS1820* temp_probe[MAX_DS1820];
 #define DS1820_DATA_PIN PB_1
 int num_ds1820 = 0;
 
+
+void wheel_pushbutton() {
+    wheel_button_pushed = true;
+}
+
+void wheel_action() {
+    wheel_rotated = true;
+}
 
 void message_handler(MQTT::MessageData& md)
 {
@@ -154,6 +166,7 @@ void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
 void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
     char temp_str[6];
     char topic_str[12];
+    printf("%ld: DS1820 reading temp...\n", uptime_sec);
     // Start temperature conversion of all probes, wait until ready
     temp_probe[0]->convertTemperature(true, DS1820::all_devices);
     // loop through all devices and publish temp
@@ -265,7 +278,7 @@ int main(void)
     wd.start(WATCHDOG_TIMEOUT_MS);
 
     printf("\n===============\n%ld: Welcome! Name: Controller%s\n", uptime_sec, CONTROLLER_NUM);
-    printf("%ld: Version: %s\n===============\n", uptime_sec, VERSION);
+    printf("%ld: Version: %s (mbed os %d.%d)\n===============\n", uptime_sec, VERSION, MBED_MAJOR_VERSION, MBED_MINOR_VERSION);
     printf("%ld: Inputs: %d Outputs: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS);
     EthernetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
@@ -302,7 +315,9 @@ int main(void)
     }
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
 
-    mRotaryEncoder enc(PA_10, PA_9, PA_8);
+    mRotaryEncoder wheel(PA_10, PA_9, PA_8); //mRotaryEncoder(PinName pinA, PinName pinB, PinName pinSW, PinMode pullMode=PullUp, int debounceTime_us=1000)
+    wheel.attachSW(&wheel_pushbutton);  // handle push button events
+    wheel.attachROT(&wheel_action);
     
     wd.kick();
 
@@ -343,10 +358,21 @@ int main(void)
                     read_ds1820(client);
                     flag_read_ds1820 = false;
                 }
+                else if (wheel_button_pushed) {
+                    printf("%ld: Wheel button pushed\n", uptime_sec);
+                    publish_num(client, (char*)"button", 1);
+                    wheel_button_pushed = false;
+                }
+                else if (wheel_rotated) {
+                    printf("%ld: Wheel rotated by: %d\n", uptime_sec, wheel.Get());
+                    publish_num(client, (char*)"wheel", wheel.Get());
+                    wheel_rotated = false;
+                    wheel.Set(0);
+                }
                 connected_mqtt = client.isConnected();
             }
             // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
-            printf("%ld: DEBUG: encoder: %d\n", uptime_sec, enc.Get());
+            // printf("%ld: DEBUG: encoder: %d\n", uptime_sec, wheel.Get());
         
             client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
         }
