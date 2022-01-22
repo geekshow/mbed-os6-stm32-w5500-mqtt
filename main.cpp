@@ -177,7 +177,7 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
             return;
         }
         else if (temp_ds == -0.25) {
-            // reject bad temp readings (0 counts converted to -0.25degC)
+            // reject bad temp readings (0 counts converted to -0.25 degC)
             printf("%ld: DS1820 %d bad temp (likely not connected) :-(\n", uptime_sec, i);
             return;
         }
