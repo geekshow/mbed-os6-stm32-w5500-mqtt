@@ -1,3 +1,4 @@
+#include "mRotaryEncoder.h"
 #include "DS1820.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
@@ -7,11 +8,11 @@
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
 
-#define VERSION "v02 IO DS1820 SSR bluepill"
+#define VERSION "v01 encoder example"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
-#define LOOP_SLEEP_MS 99
+#define LOOP_SLEEP_MS 299
 #define MQTT_KEEPALIVE 20
 #define MAX_DS1820 9
 
@@ -44,8 +45,8 @@ uint8_t conn_failures = 0;
 #define NUM_INPUTS 9
 DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 13
-DigitalOut outputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
+#define NUM_OUTPUTS 10
+DigitalOut outputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11};
 DigitalOut led(PC_13);
 
 DS1820* temp_probe[MAX_DS1820];
@@ -300,6 +301,8 @@ int main(void)
         }
     }
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
+
+    mRotaryEncoder enc(PA_10, PA_9, PA_8);
     
     wd.kick();
 
@@ -343,6 +346,7 @@ int main(void)
                 connected_mqtt = client.isConnected();
             }
             // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
+            printf("%ld: DEBUG: encoder: %d\n", uptime_sec, enc.Get());
         
             client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
         }
