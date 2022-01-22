@@ -315,7 +315,7 @@ int main(void)
     }
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
 
-    // initialise encoder AFTER DS1820 to avoid hard crash :-o
+    // initialise encoder AFTER DS1820 to avoid hard crash  :-o
     mRotaryEncoder wheel(PA_10, PA_9, PA_8); //mRotaryEncoder(PinName pinA, PinName pinB, PinName pinSW, PinMode pullMode=PullUp, int debounceTime_us=1000)
     wheel.attachSW(&wheel_pushbutton);  // handle push button events
     wheel.attachROT(&wheel_action);
