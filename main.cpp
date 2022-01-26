@@ -1,4 +1,6 @@
+#include "I2C.h"
 #include "mRotaryEncoder.h"
+#include "Adafruit_SSD1306.h"
 #include "DS1820.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
@@ -8,8 +10,9 @@
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
 #include "mbed_version.h"
+#include <cstring>
 
-#define VERSION "v01 encoder example"
+#define VERSION "v02 encoder OLED test"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -49,13 +52,22 @@ uint8_t conn_failures = 0;
 #define NUM_INPUTS 9
 DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 10
-DigitalOut outputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11};
+#define NUM_OUTPUTS 7
+DigitalOut outputs[] = {PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11};
 DigitalOut led(PC_13);
 
 DS1820* temp_probe[MAX_DS1820];
 #define DS1820_DATA_PIN PB_1
 int num_ds1820 = 0;
+
+//OLED DIMENSIONS
+#define I2C_ADDRESS   0x3c
+#define I2C_ADD_MBED  I2C_ADDRESS << 1
+#define OLED_HEIGHT_PX 64
+#define OLED_WIDTH_PX 128
+
+I2C i2c_obj(PB_9, PB_8);
+Adafruit_SSD1306_I2c myOLED(i2c_obj, PB_7, I2C_ADD_MBED, OLED_HEIGHT_PX, OLED_WIDTH_PX);
 
 
 void wheel_pushbutton() {
@@ -147,6 +159,15 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
         sprintf(topic_str, "output%d", i);
         publish_num(client, topic_str, outputs[i]);
     }
+}
+
+void update_oled() {
+    char disp_str[14];
+    printf("DBG: updating oled\n");
+    sprintf(disp_str, "uptime: %ld", uptime_sec);
+    myOLED.clearDisplay();
+    myOLED.write(disp_str, strlen(disp_str));
+    myOLED.display();
 }
 
 void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
@@ -319,6 +340,11 @@ int main(void)
     mRotaryEncoder wheel(PA_10, PA_9, PA_8); //mRotaryEncoder(PinName pinA, PinName pinB, PinName pinSW, PinMode pullMode=PullUp, int debounceTime_us=1000)
     wheel.attachSW(&wheel_pushbutton);  // handle push button events
     wheel.attachROT(&wheel_action);
+
+    myOLED.begin();
+    i2c_obj.frequency(400000);
+    myOLED.clearDisplay();
+    myOLED.display();
     
     wd.kick();
 
@@ -345,6 +371,7 @@ int main(void)
                 read_inputs(client);
                 if(flag_publish_info) {
                     publish_info(client);
+                    update_oled();
                     flag_publish_info = false;
                 }
                 else if (flag_publish_inputs) {
@@ -368,6 +395,7 @@ int main(void)
                 else if (wheel_rotated) {
                     printf("%ld: Wheel rotated by: %d\n", uptime_sec, wheel.Get());
                     publish_num(client, (char*)"wheel", wheel.Get());
+                    publish_num(client, (char*)"wheel", 0);
                     wheel_rotated = false;
                     wheel.Set(0);
                 }
