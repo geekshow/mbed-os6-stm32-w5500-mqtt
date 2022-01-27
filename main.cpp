@@ -1,4 +1,5 @@
 #include "I2C.h"
+#include "PinNames.h"
 #include "mRotaryEncoder.h"
 #include "Adafruit_SSD1306.h"
 #include "DS1820.h"
@@ -61,12 +62,23 @@ DS1820* temp_probe[MAX_DS1820];
 int num_ds1820 = 0;
 
 //OLED DIMENSIONS
-#define I2C_ADDRESS   0x3c
+#define I2C_ADDRESS   0x3d
 #define I2C_ADD_MBED  I2C_ADDRESS << 1
 #define OLED_HEIGHT_PX 64
 #define OLED_WIDTH_PX 128
 
-I2C i2c_obj(PB_9, PB_8);
+// SPI sub-class that provides a constructed default
+class I2CPreInit : public I2C
+{
+    public:
+    I2CPreInit(PinName sda,  PinName scl) : I2C(sda, scl) {
+        frequency(400000);
+        start();
+    };
+
+};
+
+I2CPreInit i2c_obj(PB_9, PB_8);
 Adafruit_SSD1306_I2c myOLED(i2c_obj, PB_7, I2C_ADD_MBED, OLED_HEIGHT_PX, OLED_WIDTH_PX);
 
 
@@ -342,7 +354,6 @@ int main(void)
     wheel.attachROT(&wheel_action);
 
     myOLED.begin();
-    i2c_obj.frequency(400000);
     myOLED.clearDisplay();
     myOLED.display();
     
