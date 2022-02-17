@@ -1,6 +1,5 @@
 #include "OLEDDisplayFonts.h"
 #include "SSD1306I2C.h"
-#include "I2C.h"
 #include "PinNames.h"
 #include "mRotaryEncoder.h"
 #include "DS1820.h"
@@ -10,9 +9,6 @@
 #include "MQTTClient.h"
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
-#include "mbed_thread.h"
-#include "mbed_version.h"
-#include <cstring>
 
 #define VERSION "v02 encoder OLED test"
 #define CONTROLLER_NUM "99"
