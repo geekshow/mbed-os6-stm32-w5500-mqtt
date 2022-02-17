@@ -1,7 +1,8 @@
+#include "OLEDDisplayFonts.h"
+#include "SSD1306I2C.h"
 #include "I2C.h"
 #include "PinNames.h"
 #include "mRotaryEncoder.h"
-#include "Adafruit_SSD1306.h"
 #include "DS1820.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
@@ -61,25 +62,8 @@ DS1820* temp_probe[MAX_DS1820];
 #define DS1820_DATA_PIN PB_1
 int num_ds1820 = 0;
 
-//OLED DIMENSIONS
-#define I2C_ADDRESS   0x3d
-#define I2C_ADD_MBED  I2C_ADDRESS << 1
-#define OLED_HEIGHT_PX 64
-#define OLED_WIDTH_PX 128
-
-// SPI sub-class that provides a constructed default
-class I2CPreInit : public I2C
-{
-    public:
-    I2CPreInit(PinName sda,  PinName scl) : I2C(sda, scl) {
-        frequency(400000);
-        start();
-    };
-
-};
-
-I2CPreInit i2c_obj(PB_9, PB_8);
-Adafruit_SSD1306_I2c myOLED(i2c_obj, PB_7, I2C_ADD_MBED, OLED_HEIGHT_PX, OLED_WIDTH_PX);
+#define OLED_ADR   0x3c
+SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
 
 
 void wheel_pushbutton() {
@@ -175,11 +159,12 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
 
 void update_oled() {
     char disp_str[14];
-    printf("DBG: updating oled\n");
     sprintf(disp_str, "uptime: %ld", uptime_sec);
-    myOLED.clearDisplay();
-    myOLED.write(disp_str, strlen(disp_str));
-    myOLED.display();
+    oled_i2c.clear();
+    oled_i2c.setFont(ArialMT_Plain_16);
+    oled_i2c.drawString(1, 1, disp_str);
+    oled_i2c.setBrightness(64);
+    oled_i2c.display();
 }
 
 void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
@@ -353,9 +338,7 @@ int main(void)
     wheel.attachSW(&wheel_pushbutton);  // handle push button events
     wheel.attachROT(&wheel_action);
 
-    myOLED.begin();
-    myOLED.clearDisplay();
-    myOLED.display();
+    oled_i2c.init();
     
     wd.kick();
 
