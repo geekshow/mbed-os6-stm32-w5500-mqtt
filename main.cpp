@@ -159,7 +159,6 @@ void update_oled() {
     oled_i2c.clear();
     oled_i2c.setFont(ArialMT_Plain_16);
     oled_i2c.drawString(1, 1, disp_str);
-    oled_i2c.setBrightness(64);
     oled_i2c.display();
 }
 
@@ -335,6 +334,11 @@ int main(void)
     wheel.attachROT(&wheel_action);
 
     oled_i2c.init();
+    oled_i2c.setFont(ArialMT_Plain_16);
+    oled_i2c.drawString(0,0,"init!");
+    oled_i2c.setBrightness(64);
+    oled_i2c.display();
+
     
     wd.kick();
 
