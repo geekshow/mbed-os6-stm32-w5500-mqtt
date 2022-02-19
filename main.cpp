@@ -8,10 +8,11 @@
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
+#include <cstdio>
 
 #define VERSION "v03 IO OLED DS1820 SSR bluepill"
-#define CONTROLLER_NUM "10"
-#define CONTROLLER_NUM_HEX 0x11
+#define CONTROLLER_NUM "99"
+#define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
@@ -26,6 +27,7 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_read_ds1820;
+bool flag_update_oled;
 
 enum IO_state {IO_ON, IO_OFF};
 
@@ -56,6 +58,7 @@ int num_ds1820 = 0;
 
 #define OLED_ADR   0x3c
 SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
+char oled_msg[21];
 
 
 void message_handler(MQTT::MessageData& md)
@@ -142,11 +145,29 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
 }
 
 void update_oled() {
-    char disp_str[14];
-    sprintf(disp_str, "uptime: %ld", uptime_sec);
     oled_i2c.clear();
-    oled_i2c.setFont(ArialMT_Plain_16);
-    oled_i2c.drawString(1, 1, disp_str);
+    oled_i2c.setFont(ArialMT_Plain_10);
+    // Boilerplate stuff
+    oled_i2c.drawString(0, 0, "Controller" CONTROLLER_NUM);
+    oled_i2c.drawString(0, 54, VERSION);
+    oled_i2c.drawHorizontalLine(0, 12, 128);
+    // Dynamic middle bit
+    oled_i2c.drawString(2, 15, oled_msg);
+    // online status
+    if (connected_net) {
+        oled_i2c.drawString(75, 0, "NET");
+    }
+    else {
+        oled_i2c.drawString(75, 0, "net");
+    }
+    if (connected_mqtt) {
+        oled_i2c.drawString(100, 0, "MQTT");
+    }
+    else {
+        oled_i2c.drawString(100, 0, "mqtt");
+    }
+    // send to display
+    oled_i2c.setBrightness(64);
     oled_i2c.display();
 }
 
@@ -186,7 +207,8 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
         // convert to string and publish
         sprintf(temp_str, "%3.2f", temp_ds);
         sprintf(topic_str, "probetemp%d", i);
-        printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
+        // printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
+        printf("%ld: DS1820 %d measures %doC (int)\n", uptime_sec, i, (int)temp_ds);
         publish(client, topic_str, temp_str, false);
     }
 }
@@ -265,6 +287,7 @@ void every_second() {
         led = !led;
     }
     wd.kick();       // kick the dog before the timeout
+    flag_update_oled = true;
 }
 
 void every_500ms() {
@@ -319,10 +342,8 @@ int main(void)
     
     // Initialise OLED display
     oled_i2c.init();
-    oled_i2c.setFont(ArialMT_Plain_16);
-    oled_i2c.drawString(0,0,"init!");
-    oled_i2c.setBrightness(64);
-    oled_i2c.display();
+    sprintf(oled_msg, "%s", "Initialising...");
+    update_oled();
     
     wd.kick();
 
@@ -350,6 +371,10 @@ int main(void)
                 if(flag_publish_info) {
                     publish_info(client);
                     flag_publish_info = false;
+                }
+                else if (flag_update_oled) {
+                    update_oled();
+                    flag_update_oled = false;
                 }
                 else if (flag_publish_inputs) {
                     publish_inputs(client);
