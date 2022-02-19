@@ -1,3 +1,5 @@
+#include "OLEDDisplayFonts.h"
+#include "SSD1306I2C.h"
 #include "DS1820.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
@@ -7,9 +9,9 @@
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
 
-#define VERSION "v02 IO DS1820 SSR bluepill"
-#define CONTROLLER_NUM "99"
-#define CONTROLLER_NUM_HEX 0x99
+#define VERSION "v03 IO OLED DS1820 SSR bluepill"
+#define CONTROLLER_NUM "10"
+#define CONTROLLER_NUM_HEX 0x11
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
@@ -44,13 +46,16 @@ uint8_t conn_failures = 0;
 #define NUM_INPUTS 9
 DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 13
-DigitalOut outputs[] = {PB_9, PB_8, PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
+#define NUM_OUTPUTS 11
+DigitalOut outputs[] = {PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
 
 DS1820* temp_probe[MAX_DS1820];
 #define DS1820_DATA_PIN PB_1
 int num_ds1820 = 0;
+
+#define OLED_ADR   0x3c
+SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
 
 
 void message_handler(MQTT::MessageData& md)
@@ -135,6 +140,17 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
         publish_num(client, topic_str, outputs[i]);
     }
 }
+
+void update_oled() {
+    char disp_str[14];
+    sprintf(disp_str, "uptime: %ld", uptime_sec);
+    oled_i2c.clear();
+    oled_i2c.setFont(ArialMT_Plain_16);
+    oled_i2c.drawString(1, 1, disp_str);
+    oled_i2c.display();
+}
+
+
 
 void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
     for (int i=0; i<NUM_INPUTS; i++) {
@@ -300,6 +316,13 @@ int main(void)
         }
     }
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
+    
+    // Initialise OLED display
+    oled_i2c.init();
+    oled_i2c.setFont(ArialMT_Plain_16);
+    oled_i2c.drawString(0,0,"init!");
+    oled_i2c.setBrightness(64);
+    oled_i2c.display();
     
     wd.kick();
 
