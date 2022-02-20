@@ -151,13 +151,20 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
 }
 
 void update_oled() {
+    char uptime_line[25];
     oled_i2c.clear();
     oled_i2c.setFont(ArialMT_Plain_10);
     // Boilerplate stuff
     oled_i2c.drawString(0, 0, "Controller" CONTROLLER_NUM);
     oled_i2c.drawHorizontalLine(0, 12, 128);
     oled_i2c.drawHorizontalLine(0, 54, 128);
-    oled_i2c.drawString(0, 54, VERSION);
+    if (uptime_sec < 10) {
+        oled_i2c.drawString(0, 54, VERSION);
+    }
+    else {
+        sprintf(uptime_line, "Uptime: %ld", uptime_sec);
+        oled_i2c.drawString(0, 54, uptime_line);
+    }
     // Dynamic middle bit
     oled_i2c.drawString(2, 15, oled_msg_line1);
     oled_i2c.drawString(2, 28, oled_msg_line2);
