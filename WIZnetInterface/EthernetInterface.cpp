@@ -71,10 +71,10 @@ int EthernetInterface::init(uint8_t * mac, const char* ip, const char* mask, con
 }
 
 // Connect Bring the interface up, start DHCP if needed.
-int EthernetInterface::connect()
+int EthernetInterface::connect(int timeout_ms)
 {
     if (dhcp) {
-        int r = IPrenew();
+        int r = IPrenew(timeout_ms);
         if (r < 0) {
             return r;
         }

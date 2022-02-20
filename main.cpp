@@ -145,6 +145,7 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
 }
 
 void update_oled() {
+    char line[23];
     oled_i2c.clear();
     oled_i2c.setFont(ArialMT_Plain_10);
     // Boilerplate stuff
@@ -153,6 +154,8 @@ void update_oled() {
     oled_i2c.drawHorizontalLine(0, 12, 128);
     // Dynamic middle bit
     oled_i2c.drawString(2, 15, oled_msg);
+    sprintf(line, "Uptime: %ld", uptime_sec);
+    oled_i2c.drawString(2, 40, line);
     // online status
     if (connected_net) {
         oled_i2c.drawString(75, 0, "NET");
@@ -207,8 +210,8 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
         // convert to string and publish
         sprintf(temp_str, "%3.2f", temp_ds);
         sprintf(topic_str, "probetemp%d", i);
-        // printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
-        printf("%ld: DS1820 %d measures %doC (int)\n", uptime_sec, i, (int)temp_ds);
+        printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
+        // printf("%ld: DS1820 %d measures %doC (int)\n", uptime_sec, i, (int)temp_ds);
         publish(client, topic_str, temp_str, false);
     }
 }
@@ -217,8 +220,9 @@ bool networking_init(EthernetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
     wiz.init(mac_addr);
-    if (wiz.connect() != 0) {
+    if (wiz.connect(3000) != 0) {
         printf("%ld: DHCP failed :-(\n", uptime_sec);
+        sprintf(oled_msg, "%s", "DHCP failed :-(");
         return false;
     }
     printf("%ld: IP: %s\n", uptime_sec, wiz.getIPAddress());
@@ -230,6 +234,7 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     printf("%ld: Connecting to MQTT broker...\n", uptime_sec);
     if (mqttNet.connect((char*)mqtt_broker, mqtt_port) != MQTT::SUCCESS) {
         printf("%ld: Couldn't connect TCP socket to broker %s :-(\n", uptime_sec, mqtt_broker);
+        sprintf(oled_msg, "%s", "Couldn't connect MQTT");
         conn_failures++;  // record this as a connection failure in case we need to reset the Wiznet
         return false;
     }
@@ -246,6 +251,7 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
+        sprintf(oled_msg, "%s", "Couldn't connect MQTT");
         conn_failures++;  // record this as a connection failure in case we need to reset the Wiznet
         return false;
     }
@@ -253,6 +259,7 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     // Subscribe to topic
     if (client.subscribe(topic_sub, MQTT::QOS1, message_handler) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't subscribe to topic :-(\n", uptime_sec);
+        sprintf(oled_msg, "%s", "MQTT subscribe error");
         return false;
     }
     printf("%ld: Subscribed to %s\n", uptime_sec, topic_sub);
@@ -390,9 +397,12 @@ int main(void)
                 }
                 connected_mqtt = client.isConnected();
             }
-            // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);
-        
+            // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);        
             client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
+        }
+        if (flag_update_oled) {
+            update_oled();
+            flag_update_oled = false;
         }
         ThisThread::sleep_for(LOOP_SLEEP_MS);
     }

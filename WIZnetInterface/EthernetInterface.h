@@ -57,9 +57,10 @@ public:
 
   /** Connect
   * Bring the interface up, start DHCP if needed.
+  * \param timeout_ms the timeout to use
   * \return 0 on success, a negative number on failure
   */
-  int connect();
+  int connect(int timeout_ms);
   
   /** Disconnect
   * Bring the interface down
