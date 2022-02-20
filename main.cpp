@@ -61,6 +61,7 @@ int num_ds1820 = 0;
 SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
 char oled_msg_line1[25];
 char oled_msg_line2[25];
+char oled_msg_line3[25];
 
 
 void message_handler(MQTT::MessageData& md)
@@ -83,11 +84,13 @@ void message_handler(MQTT::MessageData& md)
         }
         if (!strncmp(payload, "1", 1)) {
             printf("%ld: Turning output %d ON\n", uptime_sec, output_num);
+            sprintf(oled_msg_line2, "Output %d ON", output_num);
             outputs[output_num] = 1;
             flag_publish_outputs = true;
         }
         else if (!strncmp(payload, "0", 1)) {
             printf("%ld: Turning output %d OFF\n", uptime_sec, output_num);
+            sprintf(oled_msg_line2, "Output %d OFF", output_num);
             outputs[output_num] = 0;
             flag_publish_outputs = true;
         }
@@ -148,18 +151,17 @@ void publish_outputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
 }
 
 void update_oled() {
-    char line[23];
     oled_i2c.clear();
     oled_i2c.setFont(ArialMT_Plain_10);
     // Boilerplate stuff
     oled_i2c.drawString(0, 0, "Controller" CONTROLLER_NUM);
-    oled_i2c.drawString(0, 54, VERSION);
     oled_i2c.drawHorizontalLine(0, 12, 128);
+    oled_i2c.drawHorizontalLine(0, 54, 128);
+    oled_i2c.drawString(0, 54, VERSION);
     // Dynamic middle bit
     oled_i2c.drawString(2, 15, oled_msg_line1);
     oled_i2c.drawString(2, 28, oled_msg_line2);
-    sprintf(line, "Uptime: %ld", uptime_sec);
-    oled_i2c.drawString(2, 40, line);
+    oled_i2c.drawString(2, 40, oled_msg_line3);
     // online status
     if (connected_net) {
         oled_i2c.drawString(75, 0, "NET");
@@ -187,6 +189,7 @@ void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
         if(input_state[i] != old_state) {
             // input has changed state
             printf("%ld: Input %d changed to %d\n", uptime_sec, i, input_state[i]);
+            sprintf(oled_msg_line1, "Input %d changed to %d", i, input_state[i]);
             char topic_str[8]; // long enough string for inputxx
             sprintf(topic_str, "input%d", i);
             publish_num(client, topic_str, input_state[i]);
@@ -215,6 +218,7 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
         sprintf(temp_str, "%3.2f", temp_ds);
         sprintf(topic_str, "probetemp%d", i);
         printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
+        sprintf(oled_msg_line3, "%ld: DS1820 %d = %3.2foC", uptime_sec, i, temp_ds);
         // printf("%ld: DS1820 %d measures %doC (int)\n", uptime_sec, i, (int)temp_ds);
         publish(client, topic_str, temp_str, false);
     }
