@@ -16,6 +16,7 @@
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
+#define NET_TIMEOUT_MS 2000
 #define MAX_DS1820 9
 
 Ticker tick_30sec;
@@ -58,7 +59,8 @@ int num_ds1820 = 0;
 
 #define OLED_ADR   0x3c
 SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
-char oled_msg[21];
+char oled_msg_line1[25];
+char oled_msg_line2[25];
 
 
 void message_handler(MQTT::MessageData& md)
@@ -109,6 +111,7 @@ bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* ms
     // printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
     if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
         printf("%ld: Publish Error! (topic:%s msg:%s)\n", uptime_sec, topic, msg_payload);
+        sprintf(oled_msg_line1, "%s", "MQTT Publish error! :-(");
         return false;
     }
     return true;
@@ -153,7 +156,8 @@ void update_oled() {
     oled_i2c.drawString(0, 54, VERSION);
     oled_i2c.drawHorizontalLine(0, 12, 128);
     // Dynamic middle bit
-    oled_i2c.drawString(2, 15, oled_msg);
+    oled_i2c.drawString(2, 15, oled_msg_line1);
+    oled_i2c.drawString(2, 28, oled_msg_line2);
     sprintf(line, "Uptime: %ld", uptime_sec);
     oled_i2c.drawString(2, 40, line);
     // online status
@@ -220,21 +224,23 @@ bool networking_init(EthernetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
     wiz.init(mac_addr);
-    if (wiz.connect(3000) != 0) {
+    if (wiz.connect(NET_TIMEOUT_MS) != 0) {
         printf("%ld: DHCP failed :-(\n", uptime_sec);
-        sprintf(oled_msg, "%s", "DHCP failed :-(");
+        sprintf(oled_msg_line1, "%s", "DHCP failed :-(");
+        sprintf(oled_msg_line2, "IP: --");
         return false;
     }
     printf("%ld: IP: %s\n", uptime_sec, wiz.getIPAddress());
+    sprintf(oled_msg_line2, "IP: %s", wiz.getIPAddress());
     return true;
 }
 
 bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &client) {
     // TCP connect to broker
     printf("%ld: Connecting to MQTT broker...\n", uptime_sec);
-    if (mqttNet.connect((char*)mqtt_broker, mqtt_port) != MQTT::SUCCESS) {
+    if (mqttNet.connect((char*)mqtt_broker, mqtt_port, NET_TIMEOUT_MS) != MQTT::SUCCESS) {
         printf("%ld: Couldn't connect TCP socket to broker %s :-(\n", uptime_sec, mqtt_broker);
-        sprintf(oled_msg, "%s", "Couldn't connect MQTT");
+        sprintf(oled_msg_line1, "%s", "Couldn't connect MQTT");
         conn_failures++;  // record this as a connection failure in case we need to reset the Wiznet
         return false;
     }
@@ -251,15 +257,16 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
-        sprintf(oled_msg, "%s", "Couldn't connect MQTT");
+        sprintf(oled_msg_line1, "%s", "Couldn't connect MQTT");
         conn_failures++;  // record this as a connection failure in case we need to reset the Wiznet
         return false;
     }
     printf("%ld: Connected to broker %s :-)\n", uptime_sec, mqtt_broker);
+    sprintf(oled_msg_line1, "%s", "Connected to Broker :-)");
     // Subscribe to topic
     if (client.subscribe(topic_sub, MQTT::QOS1, message_handler) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't subscribe to topic :-(\n", uptime_sec);
-        sprintf(oled_msg, "%s", "MQTT subscribe error");
+        sprintf(oled_msg_line1, "%s", "MQTT subscribe error");
         return false;
     }
     printf("%ld: Subscribed to %s\n", uptime_sec, topic_sub);
@@ -315,7 +322,7 @@ int main(void)
     EthernetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
     MQTTNetwork mqttNetwork(&wiz);
-    MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
+    MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork, NET_TIMEOUT_MS);
 
     tick_500ms.attach(&every_500ms, 0.5);
     tick_1sec.attach(&every_second, 1.0);
@@ -349,7 +356,7 @@ int main(void)
     
     // Initialise OLED display
     oled_i2c.init();
-    sprintf(oled_msg, "%s", "Initialising...");
+    sprintf(oled_msg_line1, "%s", "Initialising...");
     update_oled();
     
     wd.kick();

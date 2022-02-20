@@ -36,9 +36,10 @@ public:
     /** Connects this TCP socket to the server
     \param host The host to connect to. It can either be an IP Address or a hostname that will be resolved with DNS.
     \param port The host's port to connect to.
+    \param timeout_ms Timeout in ms
     \return 0 on success, -1 on failure.
     */
-    int connect(const char* host, const int port);
+    int connect(const char* host, const int port, int timeout_ms);
     
     /** Check if the socket is connected
     \return true if connected, false otherwise.

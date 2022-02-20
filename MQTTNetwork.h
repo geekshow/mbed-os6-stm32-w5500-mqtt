@@ -22,8 +22,8 @@ public:
         return socket->send((char*)buffer, len);
     }
  
-    int connect(const char* hostname, int port) {
-        return socket->connect(hostname, port);
+    int connect(const char* hostname, int port, int timeout_ms) {
+        return socket->connect(hostname, port, timeout_ms);
     }
 
     char* getIPAddress() {

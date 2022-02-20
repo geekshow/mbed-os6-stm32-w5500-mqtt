@@ -29,7 +29,7 @@ TCPSocketConnection::TCPSocketConnection() :
 {
 }
 
-int TCPSocketConnection::connect(const char* host, const int port)
+int TCPSocketConnection::connect(const char* host, const int port, int timeout_ms)
 {
     if (_sock_fd < 0) {
         _sock_fd = eth->new_socket();
@@ -40,7 +40,7 @@ int TCPSocketConnection::connect(const char* host, const int port)
     if (set_address(host, port) != 0) {
         return -1;
     }
-    if (!eth->connect(_sock_fd, get_address(), port)) {
+    if (!eth->connect(_sock_fd, get_address(), port, timeout_ms)) {
         return -1;
     }
     set_blocking(false);
