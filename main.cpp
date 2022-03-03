@@ -225,7 +225,7 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
         sprintf(temp_str, "%3.2f", temp_ds);
         sprintf(topic_str, "probetemp%d", i);
         printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
-        sprintf(oled_msg_line3, "%ld: DS1820 %d = %3.2foC", uptime_sec, i, temp_ds);
+        sprintf(oled_msg_line3, "DS1820 %d = %3.2foC", i, temp_ds);
         // printf("%ld: DS1820 %d measures %doC (int)\n", uptime_sec, i, (int)temp_ds);
         publish(client, topic_str, temp_str, false);
     }
