@@ -1,6 +1,5 @@
 #include "OLEDDisplayFonts.h"
 #include "SSD1306I2C.h"
-#include "DS1820.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
 #include "EthernetInterface.h"
@@ -10,14 +9,13 @@
 #include "mbed_thread.h"
 #include <cstdio>
 
-#define VERSION "v03 IO OLED DS1820 SSR bluepill"
+#define VERSION "v01 OLED Interface bluepill"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
 #define NET_TIMEOUT_MS 2000
-#define MAX_DS1820 9
 
 Ticker tick_30sec;
 Ticker tick_15sec;
@@ -27,7 +25,6 @@ Ticker tick_500ms;
 bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
-bool flag_read_ds1820;
 bool flag_update_oled;
 
 enum IO_state {IO_ON, IO_OFF};
@@ -53,9 +50,6 @@ bool input_state[NUM_INPUTS];
 DigitalOut outputs[] = {PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
 
-DS1820* temp_probe[MAX_DS1820];
-#define DS1820_DATA_PIN PB_1
-int num_ds1820 = 0;
 
 #define OLED_ADR   0x3c
 SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
@@ -204,33 +198,6 @@ void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
     }
 }
 
-void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
-    char temp_str[6];
-    char topic_str[12];
-    // Start temperature conversion of all probes, wait until ready
-    temp_probe[0]->convertTemperature(true, DS1820::all_devices);
-    // loop through all devices and publish temp
-    for (int i = 0; i<num_ds1820; i++) {
-        float temp_ds = temp_probe[i]->temperature();
-        if (temp_ds == DS1820::invalid_conversion) {
-            printf("%ld: DS1820 %d failed temperature conversion :-(\n", uptime_sec, i);
-            return;
-        }
-        else if (temp_ds == -0.25) {
-            // reject bad temp readings (0 counts converted to -0.25degC)
-            printf("%ld: DS1820 %d bad temp (likely not connected) :-(\n", uptime_sec, i);
-            return;
-        }
-        // convert to string and publish
-        sprintf(temp_str, "%3.2f", temp_ds);
-        sprintf(topic_str, "probetemp%d", i);
-        printf("%ld: DS1820 %d measures %3.2foC\n", uptime_sec, i, temp_ds);
-        sprintf(oled_msg_line3, "DS1820 %d = %3.2foC", i, temp_ds);
-        // printf("%ld: DS1820 %d measures %doC (int)\n", uptime_sec, i, (int)temp_ds);
-        publish(client, topic_str, temp_str, false);
-    }
-}
-
 bool networking_init(EthernetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
@@ -287,7 +254,6 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     publish_num(client, "online", 1, true);
     publish_num(client, "inputs", NUM_INPUTS, true);
     publish_num(client, "outputs", NUM_OUTPUTS, true);
-    publish_num(client, "ds1820", num_ds1820, true);
     conn_failures = 0;   // remember to reset this on success
     return true;
 } 
@@ -297,7 +263,6 @@ void every_30sec() {
     // no waits or blocking routines here please!
     flag_publish_inputs = true;
     flag_publish_outputs = true;
-    flag_read_ds1820 = true;
 }
 
 void every_15sec() {
@@ -355,16 +320,6 @@ int main(void)
         thread_sleep_for(100);
     }
 
-    // Initialize DS1820 probe array
-    while(DS1820::unassignedProbe(DS1820_DATA_PIN)) {
-        temp_probe[num_ds1820] = new DS1820(DS1820_DATA_PIN);
-        num_ds1820++;
-        if (num_ds1820 == MAX_DS1820) {
-            break;
-        }
-    }
-    printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
-    
     // Initialise OLED display
     oled_i2c.init();
     sprintf(oled_msg_line1, "%s", "Initialising...");
@@ -408,10 +363,6 @@ int main(void)
                 else if (flag_publish_outputs) {
                     publish_outputs(client);
                     flag_publish_outputs = false;
-                }
-                else if (flag_read_ds1820) {
-                    read_ds1820(client);
-                    flag_read_ds1820 = false;
                 }
                 connected_mqtt = client.isConnected();
             }
