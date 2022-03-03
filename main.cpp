@@ -327,8 +327,8 @@ int main(void)
 {
     wd.start(WATCHDOG_TIMEOUT_MS);
 
-    printf("\n============\n%ld: Welcome! Name: Controller%s\n", uptime_sec, CONTROLLER_NUM);
-    printf("%ld: Version: %s\n============\n", uptime_sec, VERSION);
+    printf("\n===========\n%ld: Welcome! Name: Controller%s\n", uptime_sec, CONTROLLER_NUM);
+    printf("%ld: Version: %s\n===========\n", uptime_sec, VERSION);
     printf("%ld: Inputs: %d Outputs: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS);
     EthernetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
