@@ -1,3 +1,4 @@
+#include "mRotaryEncoder.h"
 #include "OLEDDisplayFonts.h"
 #include "SSD1306I2C.h"
 #include "TCPSocketConnection.h"
@@ -26,6 +27,9 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_update_oled;
+bool wheel_button_pushed;
+bool wheel_rotated;
+int wheel_rotated_by;
 
 enum IO_state {IO_ON, IO_OFF};
 
@@ -46,8 +50,8 @@ uint8_t conn_failures = 0;
 #define NUM_INPUTS 9
 DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
 bool input_state[NUM_INPUTS];
-#define NUM_OUTPUTS 11
-DigitalOut outputs[] = {PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
+#define NUM_OUTPUTS 8
+DigitalOut outputs[] = {PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11};
 DigitalOut led(PC_13);
 
 
@@ -57,6 +61,14 @@ char oled_msg_line1[25];
 char oled_msg_line2[25];
 char oled_msg_line3[25];
 
+
+void wheel_pushbutton() {
+    wheel_button_pushed = true;
+}
+
+void wheel_action() {
+    wheel_rotated = true;
+}
 
 void message_handler(MQTT::MessageData& md)
 {
@@ -320,6 +332,11 @@ int main(void)
         thread_sleep_for(100);
     }
 
+    // initialise encoder AFTER DS1820 to avoid hard crash :-o
+    mRotaryEncoder wheel(PA_10, PA_9, PA_8); //mRotaryEncoder(PinName pinA, PinName pinB, PinName pinSW, PinMode pullMode=PullUp, int debounceTime_us=1000)
+    wheel.attachSW(&wheel_pushbutton);  // handle push button events
+    wheel.attachROT(&wheel_action);
+
     // Initialise OLED display
     oled_i2c.init();
     sprintf(oled_msg_line1, "%s", "Initialising...");
@@ -364,9 +381,23 @@ int main(void)
                     publish_outputs(client);
                     flag_publish_outputs = false;
                 }
+                else if (wheel_button_pushed) {
+                    printf("%ld: Wheel button pushed\n", uptime_sec);
+                    publish_num(client, (char*)"button", 1);
+                    publish_num(client, (char*)"button", 0);
+                    wheel_button_pushed = false;
+                }
+                else if (wheel_rotated) {
+                    printf("%ld: Wheel rotated by: %d\n", uptime_sec, wheel.Get());
+                    publish_num(client, (char*)"wheel", wheel.Get());
+                    publish_num(client, (char*)"wheel", 0);
+                    wheel_rotated = false;
+                    wheel.Set(0);
+                }
                 connected_mqtt = client.isConnected();
             }
-            // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);        
+            // printf("%ld: DEBUG: MQTT connected: %d\n", uptime_sec, connected_mqtt);       
+            // printf("%ld: DEBUG: encoder: %d\n", uptime_sec, wheel.Get()) 
             client.yield(LOOP_SLEEP_MS);  // pause a while, yawn......
         }
         if (flag_update_oled) {
