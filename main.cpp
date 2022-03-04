@@ -29,9 +29,6 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_update_oled;
-bool wheel_button_pushed;
-bool wheel_rotated;
-int wheel_rotated_by;
 
 enum IO_state {IO_ON, IO_OFF};
 
@@ -63,7 +60,18 @@ char oled_msg_line1[25];
 char oled_msg_line2[25];
 // char oled_msg_line3[26];
 
+// User Interface things
 int16_t volume;
+bool wheel_button_pushed;
+bool menu;
+bool wheel_rotated;
+int wheel_rotated_by;
+int8_t menu_select;
+char m_opt0[25];
+char m_opt1[25];
+char m_opt2[25];
+char* menu_options[] = {m_opt0, m_opt1, m_opt2};
+#define MAX_MENU_OPT 2
 
 
 void wheel_pushbutton() {
@@ -122,6 +130,18 @@ void message_handler(MQTT::MessageData& md)
         // media title update received
         sprintf(oled_msg_line1, "%.*s", 25, payload);
         sprintf(oled_msg_line2, "%.*s", 25, payload+25);
+    }
+    else if (!strncmp(sub_topic, "option0", 7)) {
+        // menu item update received
+        sprintf(m_opt0, "%s", payload);
+    }
+    else if (!strncmp(sub_topic, "option1", 7)) {
+        // menu item update received
+        sprintf(m_opt1, "%s", payload);
+    }
+    else if (!strncmp(sub_topic, "option2", 7)) {
+        // menu item update received
+        sprintf(m_opt2, "%s", payload);
     }
 }
 
@@ -189,13 +209,31 @@ void update_oled() {
         sprintf(uptime_line, "Uptime: %ld", uptime_sec);
         oled_i2c.drawString(0, 54, uptime_line);
     }
-    // Volume bar
-    oled_i2c.drawString(2, 15, "VOL");
-    oled_i2c.drawRect(25, 15, 100, 12);
-    oled_i2c.fillRect(25, 15, volume, 12);
-    // Dynamic text bit
-    oled_i2c.drawString(2, 28, oled_msg_line1);
-    oled_i2c.drawString(2, 40, oled_msg_line2);
+    if (menu) {
+        // menu select
+        if (menu_select == 0) {
+            oled_i2c.drawRect(2, 15, 100, 12);
+        }
+        else if (menu_select == 1) {
+            oled_i2c.drawRect(2, 28, 100, 12);
+        }
+        else if (menu_select == 2) {
+            oled_i2c.drawRect(2, 40, 100, 12);
+        }
+        // menu options
+        oled_i2c.drawString(5, 15, m_opt0);
+        oled_i2c.drawString(5, 28, m_opt1);
+        oled_i2c.drawString(5, 40, m_opt2);
+    }
+    else {
+        // Volume bar
+        oled_i2c.drawString(2, 15, "VOL");
+        oled_i2c.drawRect(25, 15, 100, 12);
+        oled_i2c.fillRect(25, 15, volume, 12);
+        // Dynamic text bit
+        oled_i2c.drawString(2, 28, oled_msg_line1);
+        oled_i2c.drawString(2, 40, oled_msg_line2);
+    }
     // online status
     if (connected_net) {
         oled_i2c.drawString(75, 0, "NET");
@@ -362,6 +400,11 @@ int main(void)
     oled_i2c.init();
     sprintf(oled_msg_line1, "%s", "Initialising...");
     update_oled();
+
+    // init menu
+    sprintf(m_opt0, "%s", "Option0");
+    sprintf(m_opt1, "%s", "Option1");
+    sprintf(m_opt2, "%s", "Option2");
     
     wd.kick();
 
@@ -403,18 +446,46 @@ int main(void)
                     flag_publish_outputs = false;
                 }
                 else if (wheel_button_pushed) {
-                    printf("%ld: Wheel button pushed\n", uptime_sec);
-                    publish_num(client, (char*)"button", 1);
-                    publish_num(client, (char*)"button", 0);
+                    if (menu) {
+                        printf("%ld: Select option %d\n", uptime_sec, menu_select);
+                        publish(client, (char*)"menu_select", menu_options[menu_select]);
+                        menu = false;
+                    }
+                    else {
+                        printf("%ld: Bring up menu\n", uptime_sec);
+                        menu = true;
+                        menu_select = 0;
+                    }
                     wheel_button_pushed = false;
                 }
                 else if (wheel_rotated) {
                     printf("%ld: Wheel rotated by: %d\n", uptime_sec, wheel.Get());
-                    volume += wheel.Get();
-                    if (volume < 0) {volume = 0;}
-                    else if (volume > 100) {volume = 100;}
-                    printf("%ld: Volume now %d\n", uptime_sec, volume);
-                    publish_num(client, (char*)"volume", volume);
+                    if (menu) {
+                        if (wheel.Get() > 0) {   // UP
+                            if (menu_select == MAX_MENU_OPT) {  // Rollover
+                                menu_select = 0;
+                            }
+                            else {
+                                menu_select++;
+                            }
+                        }
+                        else { // DOWN
+                            if (menu_select == 0) {  // Rollover
+                                menu_select = MAX_MENU_OPT;
+                            }
+                            else {
+                                menu_select--;
+                            }
+                        }
+                        printf("%ld: DBG: Menu select now: %d\n", uptime_sec, menu_select);
+                    }
+                    else {
+                        volume += wheel.Get();
+                        if (volume < 0) {volume = 0;}
+                        else if (volume > 100) {volume = 100;}
+                        printf("%ld: Volume now %d\n", uptime_sec, volume);
+                        publish_num(client, (char*)"volume", volume);
+                    }
                     wheel_rotated = false;
                     wheel.Set(0);
                 }
