@@ -59,8 +59,8 @@ DigitalOut led(PC_13);
 
 #define OLED_ADR   0x3c
 SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
-char oled_msg_line1[26];
-char oled_msg_line2[26];
+char oled_msg_line1[25];
+char oled_msg_line2[25];
 // char oled_msg_line3[26];
 
 uint32_t volume;
@@ -120,7 +120,8 @@ void message_handler(MQTT::MessageData& md)
     }
     else if (!strncmp(sub_topic, "title", 5)) {
         // media title update received
-        sprintf(oled_msg_line1, "%s", payload);
+        sprintf(oled_msg_line1, "%.*s", 25, payload);
+        sprintf(oled_msg_line2, "%.*s", 25, payload+25);
     }
 }
 
@@ -409,8 +410,11 @@ int main(void)
                 }
                 else if (wheel_rotated) {
                     printf("%ld: Wheel rotated by: %d\n", uptime_sec, wheel.Get());
-                    publish_num(client, (char*)"wheel", wheel.Get());
-                    publish_num(client, (char*)"wheel", 0);
+                    volume += wheel.Get();
+                    if (volume < 0) {volume = 0;}
+                    else if (volume > 100) {volume = 100;}
+                    printf("%ld: Volume now %d\n", uptime_sec, volume);
+                    publish_num(client, (char*)"volume", volume);
                     wheel_rotated = false;
                     wheel.Set(0);
                 }
