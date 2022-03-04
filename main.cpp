@@ -8,9 +8,11 @@
 #include "MQTTNetwork.h"
 #include "MQTTmbed.h"
 #include "mbed_thread.h"
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
-#define VERSION "v01 OLED Interface bluepill"
+#define VERSION "v01 OLED Rotary bluepill"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -57,9 +59,11 @@ DigitalOut led(PC_13);
 
 #define OLED_ADR   0x3c
 SSD1306I2C oled_i2c(OLED_ADR, PB_9, PB_8);
-char oled_msg_line1[25];
-char oled_msg_line2[25];
-char oled_msg_line3[25];
+char oled_msg_line1[26];
+char oled_msg_line2[26];
+// char oled_msg_line3[26];
+
+uint32_t volume;
 
 
 void wheel_pushbutton() {
@@ -104,6 +108,19 @@ void message_handler(MQTT::MessageData& md)
             printf("%ld: Error: unknown output command: %s\n", uptime_sec, payload);
             return;
         }
+    }
+    else if (!strncmp(sub_topic, "volume", 6)) {
+        // volume update received
+        uint32_t new_volume;
+        new_volume = atoi(payload);
+        if (new_volume != volume) {
+            printf("%ld: Volume changed to %d\n", uptime_sec, new_volume);
+            volume = new_volume;
+        }
+    }
+    else if (!strncmp(sub_topic, "title", 5)) {
+        // media title update received
+        sprintf(oled_msg_line1, "%s", payload);
     }
 }
 
@@ -171,10 +188,13 @@ void update_oled() {
         sprintf(uptime_line, "Uptime: %ld", uptime_sec);
         oled_i2c.drawString(0, 54, uptime_line);
     }
-    // Dynamic middle bit
-    oled_i2c.drawString(2, 15, oled_msg_line1);
-    oled_i2c.drawString(2, 28, oled_msg_line2);
-    oled_i2c.drawString(2, 40, oled_msg_line3);
+    // Volume bar
+    oled_i2c.drawString(2, 15, "VOL");
+    oled_i2c.drawRect(25, 15, 100, 12);
+    oled_i2c.fillRect(25, 15, volume, 12);
+    // Dynamic text bit
+    oled_i2c.drawString(2, 28, oled_msg_line1);
+    oled_i2c.drawString(2, 40, oled_msg_line2);
     // online status
     if (connected_net) {
         oled_i2c.drawString(75, 0, "NET");
