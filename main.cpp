@@ -63,7 +63,7 @@ char oled_msg_line1[25];
 char oled_msg_line2[25];
 // char oled_msg_line3[26];
 
-uint32_t volume;
+int16_t volume;
 
 
 void wheel_pushbutton() {
