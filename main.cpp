@@ -12,7 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define VERSION "v01 OLED Rotary bluepill"
+#define VERSION "v02 OLED Rotary crashfix"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -62,6 +62,7 @@ char oled_msg_line2[25];
 
 // User Interface things
 int16_t volume;
+int16_t new_volume;
 bool wheel_button_pushed;
 bool menu;
 bool wheel_rotated;
@@ -119,7 +120,6 @@ void message_handler(MQTT::MessageData& md)
     }
     else if (!strncmp(sub_topic, "volume", 6)) {
         // volume update received
-        uint32_t new_volume;
         new_volume = atoi(payload);
         if (new_volume != volume) {
             printf("%ld: Volume changed to %d\n", uptime_sec, new_volume);
