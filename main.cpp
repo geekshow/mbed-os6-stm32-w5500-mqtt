@@ -1,7 +1,9 @@
 #include "OLEDDisplayFonts.h"
 #include "SSD1306I2C.h"
 #include "DS1820.h"
+#include "SI7021.h"
 #include "TCPSocketConnection.h"
+#include "ThisThread.h"
 #include "mbed.h"
 #include "EthernetInterface.h"
 #include "MQTTClient.h"
@@ -10,7 +12,7 @@
 #include "mbed_thread.h"
 #include <cstdio>
 
-#define VERSION "v03 IO OLED DS1820 SSR bluepill"
+#define VERSION "v03 IO OLED Si7021 bluepill"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -28,6 +30,7 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_read_ds1820;
+bool flag_read_si7021;
 bool flag_update_oled;
 
 enum IO_state {IO_ON, IO_OFF};
@@ -52,6 +55,10 @@ bool input_state[NUM_INPUTS];
 #define NUM_OUTPUTS 11
 DigitalOut outputs[] = {PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
+
+SI7021 sensor(PB_9, PB_8, SI7021::SI7021_ADDRESS, 400000);
+SI7021::SI7021_vector_data_t siData;
+SI7021::SI7021_status_t siStatus;
 
 DS1820* temp_probe[MAX_DS1820];
 #define DS1820_DATA_PIN PB_1
@@ -231,6 +238,31 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
     }
 }
 
+void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client) {
+    char temp_str[6];
+    char topic_str[12];
+    int i = 0; // TEMPORARY! REPLACE WITH SI number
+    // Start humidity conversion (temp conversion triggered by default)
+    siStatus = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
+    thread_sleep_for(500);
+    siStatus = sensor.SI7021_ReadHumidity(&siData);
+    siStatus = sensor.SI7021_ReadTemperatureFromRH(&siData);
+    if (siStatus == SI7021::SI7021_FAILURE) {
+        printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, i);
+        return;
+    }
+    // convert to string and publish
+    printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, i, siData.Temperature, siData.RelativeHumidity);
+    sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", i, siData.RelativeHumidity);
+    sprintf(oled_msg_line3, "SI7021 %d = %3.2foC", i, siData.Temperature);
+    sprintf(topic_str, "temp%d", i);
+    sprintf(temp_str, "%3.2f", siData.Temperature);
+    publish(client, topic_str, temp_str, false);
+    sprintf(topic_str, "humdity%d", i);
+    sprintf(temp_str, "%3.2f", siData.RelativeHumidity);
+    publish(client, topic_str, temp_str, false);
+}
+
 bool networking_init(EthernetInterface &wiz) {
     printf("%ld: Start networking...\n", uptime_sec);
     // reset the w5500
@@ -298,6 +330,7 @@ void every_30sec() {
     flag_publish_inputs = true;
     flag_publish_outputs = true;
     flag_read_ds1820 = true;
+    flag_read_si7021 = true;
 }
 
 void every_15sec() {
@@ -364,6 +397,19 @@ int main(void)
         }
     }
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
+
+    // Initialise SI7021 temp/humidity sensor
+    siStatus = sensor.SI7021_SoftReset();
+    if(siStatus == SI7021::SI7021_FAILURE) {
+        printf("%ld: SI7021: Error! Check connections\n", uptime_sec);
+    }
+    else {
+        ThisThread::sleep_for(15);
+        siStatus = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+        siStatus = sensor.SI7021_GetElectronicSerialNumber(&siData);
+        siStatus = sensor.SI7021_GetFirmwareRevision(&siData);
+        printf("%ld: SI7021: FW: %02x ESN: %16x %16x\n", uptime_sec, siData.FirmwareRevision, siData.ElectronicSerialNumber_MSB, siData.ElectronicSerialNumber_LSB);
+    }
     
     // Initialise OLED display
     oled_i2c.init();
@@ -412,6 +458,10 @@ int main(void)
                 else if (flag_read_ds1820) {
                     read_ds1820(client);
                     flag_read_ds1820 = false;
+                }
+                else if (flag_read_si7021) {
+                    read_si7021(client);
+                    flag_read_si7021 = false;
                 }
                 connected_mqtt = client.isConnected();
             }
