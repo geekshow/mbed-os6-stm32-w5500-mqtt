@@ -60,7 +60,7 @@ DigitalOut led(PC_13);
 int sensor_to_read = 0;
 DigitalOut sensors[] = {PB_7, PB_6, PB_5, PB_4}; // switched Vcc on each
 SI7021 sensor(PB_9, PB_8, SI7021::SI7021_ADDRESS, 400000); // common to all sensors
-SI7021::SI7021_vector_data_t siData;
+SI7021::SI7021_vector_data_t siData[NUM_SENSORS];
 SI7021::SI7021_status_t siStatus[NUM_SENSORS];
 
 DS1820* temp_probe[MAX_DS1820];
@@ -251,16 +251,16 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
         }
     }
     if (siStatus[num] == SI7021::SI7021_FAILURE) {
-        printf("%ld: SI7021 %d resetting(\n", uptime_sec, num);
+        printf("%ld: SI7021 %d resetting\n", uptime_sec, num);
         siStatus[num] = sensor.SI7021_SoftReset();
-        ThisThread::sleep_for(15);
+        ThisThread::sleep_for(25);
     }
     if (siStatus[num] == SI7021::SI7021_SUCCESS) {
         // Start humidity conversion (temp conversion triggered by default)
         siStatus[num] = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
         thread_sleep_for(50);
-        siStatus[num] = sensor.SI7021_ReadHumidity(&siData);
-        siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData);
+        siStatus[num] = sensor.SI7021_ReadHumidity(&siData[num]);
+        siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData[num]);
         if (siStatus[num] == SI7021::SI7021_FAILURE) {
             printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, num);
         }
@@ -271,14 +271,14 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     }
     if (siStatus[num] == SI7021::SI7021_SUCCESS) {
         // convert to string and publish
-        printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, siData.Temperature, siData.RelativeHumidity);
-        sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", num, siData.RelativeHumidity);
-        sprintf(oled_msg_line3, "SI7021 %d = %3.2foC", num, siData.Temperature);
+        printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, siData[num].Temperature, siData[num].RelativeHumidity);
+        sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", num, siData[num].RelativeHumidity);
+        sprintf(oled_msg_line3, "SI7021 %d = %3.2foC", num, siData[num].Temperature);
         sprintf(topic_str, "temp%d", num);
-        sprintf(temp_str, "%3.2f", siData.Temperature);
+        sprintf(temp_str, "%3.2f", siData[num].Temperature);
         publish(client, topic_str, temp_str, false);
         sprintf(topic_str, "humdity%d", num);
-        sprintf(temp_str, "%3.2f", siData.RelativeHumidity);
+        sprintf(temp_str, "%3.2f", siData[num].RelativeHumidity);
         publish(client, topic_str, temp_str, false);
     }
 }
