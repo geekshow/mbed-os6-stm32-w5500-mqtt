@@ -249,9 +249,9 @@ void select_si7021(int num) {
     }
 }
 
-void all_on_si7021() {
+void all_si7021(bool onoff) {
     for (int i = 0; i<NUM_SENSORS; i++) {
-            sensors[i] = 1;
+            sensors[i] = onoff;
     }
 }
 
@@ -263,7 +263,7 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     // siStatus[num] = sensor.SI7021_SoftReset();
     if (siStatus[num] == SI7021::SI7021_FAILURE) {
         printf("%ld: SI7021 %d dead, skipping\n", uptime_sec, num);
-        all_on_si7021();
+        all_si7021(true);
         return;
         // siStatus[num] = sensor.SI7021_SoftReset();
         // ThisThread::sleep_for(25);
@@ -293,7 +293,7 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
         sprintf(temp_str, "%3.2f", siData[num].RelativeHumidity);
         publish(client, topic_str, temp_str, false);
     }
-    all_on_si7021();
+    all_si7021(true);
 }
 
 bool networking_init(EthernetInterface &wiz) {
@@ -407,7 +407,7 @@ int main(void)
     tick_30sec.attach(&every_30sec, 29.5);
 
     // Switch on all SI7021
-    all_on_si7021();
+    all_si7021(true);
 
     // pull high all inputs
     for(int i=0; i<NUM_INPUTS; i++) {
@@ -443,7 +443,7 @@ int main(void)
         ThisThread::sleep_for(50);
         siStatus[i] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
     }
-    all_on_si7021();
+    all_si7021(true);
     // siStatus[num] = sensor.SI7021_SoftReset();
     // ThisThread::sleep_for(15);
     // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
