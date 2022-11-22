@@ -60,7 +60,7 @@ DigitalOut led(PC_13);
 int sensor_to_read = 0;
 DigitalOut sensors[] = {PB_7, PB_6, PB_5, PB_4}; // switched Vcc on each
 SI7021 sensor(PB_9, PB_8, SI7021::SI7021_ADDRESS, 400000); // common to all sensors
-SI7021::SI7021_vector_data_t siData[NUM_SENSORS];
+SI7021::SI7021_vector_data_t siData;
 SI7021::SI7021_status_t siStatus[NUM_SENSORS];
 
 DS1820* temp_probe[MAX_DS1820];
@@ -258,24 +258,20 @@ void all_si7021(bool onoff) {
 void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     char temp_str[6];
     char topic_str[12];
-    select_si7021(num);
-    ThisThread::sleep_for(25);
-    // siStatus[num] = sensor.SI7021_SoftReset();
     if (siStatus[num] == SI7021::SI7021_FAILURE) {
         printf("%ld: SI7021 %d dead, skipping\n", uptime_sec, num);
         all_si7021(true);
         return;
-        // siStatus[num] = sensor.SI7021_SoftReset();
-        // ThisThread::sleep_for(25);
-        // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
     }
+    select_si7021(num);
     ThisThread::sleep_for(25);
-    siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+    // siStatus[num] = sensor.SI7021_SoftReset();
+    // ThisThread::sleep_for(25);
     // Start humidity conversion (temp conversion triggered by default)
     siStatus[num] = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
     thread_sleep_for(50);
-    siStatus[num] = sensor.SI7021_ReadHumidity(&siData[num]);
-    siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData[num]);
+    siStatus[num] = sensor.SI7021_ReadHumidity(&siData);
+    siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData);
     if (siStatus[num] == SI7021::SI7021_FAILURE) {
         printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, num);
         siStatus[num] = sensor.SI7021_SoftReset();
@@ -283,14 +279,14 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     }
     else {
         // convert to string and publish
-        printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, siData[num].Temperature, siData[num].RelativeHumidity);
-        sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", num, siData[num].RelativeHumidity);
-        sprintf(oled_msg_line3, "SI7021 %d = %3.2foC", num, siData[num].Temperature);
+        printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, siData.Temperature, siData.RelativeHumidity);
+        sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", num, siData.RelativeHumidity);
+        sprintf(oled_msg_line3, "SI7021 %d = %3.2foC", num, siData.Temperature);
         sprintf(topic_str, "temp%d", num);
-        sprintf(temp_str, "%3.2f", siData[num].Temperature);
+        sprintf(temp_str, "%3.2f", siData.Temperature);
         publish(client, topic_str, temp_str, false);
         sprintf(topic_str, "humdity%d", num);
-        sprintf(temp_str, "%3.2f", siData[num].RelativeHumidity);
+        sprintf(temp_str, "%3.2f", siData.RelativeHumidity);
         publish(client, topic_str, temp_str, false);
     }
     all_si7021(true);
@@ -434,23 +430,6 @@ int main(void)
     }
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
 
-    // Initialise SI7021 temp/humidity sensor
-    for(int i=0; i<NUM_SENSORS; i++) {
-        select_si7021(i);
-        ThisThread::sleep_for(100);
-        siStatus[i] = sensor.SI7021_SoftReset();
-        printf("%ld: SI7021 %d reset success: %d\n", uptime_sec, i, siStatus[i]);
-        ThisThread::sleep_for(50);
-        siStatus[i] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
-    }
-    all_si7021(true);
-    // siStatus[num] = sensor.SI7021_SoftReset();
-    // ThisThread::sleep_for(15);
-    // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
-    // siStatus[num] = sensor.SI7021_GetElectronicSerialNumber(&siData);
-    // siStatus[num] = sensor.SI7021_GetFirmwareRevision(&siData);
-    // printf("%ld: SI7021: FW: %02x ESN: %16x %16x\n", uptime_sec, siData.FirmwareRevision, siData.ElectronicSerialNumber_MSB, siData.ElectronicSerialNumber_LSB);
-    
     // Initialise OLED display
     oled_i2c.init();
     sprintf(oled_msg_line1, "%s", "Initialising...");
