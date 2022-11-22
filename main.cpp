@@ -56,7 +56,7 @@ bool input_state[NUM_INPUTS];
 DigitalOut outputs[] = {PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
 
-#define NUM_SENSORS 4
+#define NUM_SENSORS 2
 int sensor_to_read = 0;
 DigitalOut sensors[] = {PB_7, PB_6, PB_5, PB_4}; // switched Vcc on each
 SI7021 sensor(PB_9, PB_8, SI7021::SI7021_ADDRESS, 400000); // common to all sensors
@@ -241,35 +241,47 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
     }
 }
 
+void select_si7021(int num) {
+    for (int i = 0; i<NUM_SENSORS; i++) {
+        if (i != num) {
+            sensors[i] = 0;
+        }
+    }
+}
+
+void all_on_si7021() {
+    for (int i = 0; i<NUM_SENSORS; i++) {
+            sensors[i] = 1;
+    }
+}
+
 void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     char temp_str[6];
     char topic_str[12];
-    // turn off other sensors
-    for (int j = 0; j<NUM_SENSORS; j++) {
-        if (j != num) {
-            sensors[j] = 0;
-        }
-    }
+    select_si7021(num);
+    ThisThread::sleep_for(25);
+    // siStatus[num] = sensor.SI7021_SoftReset();
     if (siStatus[num] == SI7021::SI7021_FAILURE) {
-        printf("%ld: SI7021 %d resetting\n", uptime_sec, num);
+        printf("%ld: SI7021 %d dead, skipping\n", uptime_sec, num);
+        all_on_si7021();
+        return;
+        // siStatus[num] = sensor.SI7021_SoftReset();
+        // ThisThread::sleep_for(25);
+        // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+    }
+    ThisThread::sleep_for(25);
+    siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+    // Start humidity conversion (temp conversion triggered by default)
+    siStatus[num] = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
+    thread_sleep_for(50);
+    siStatus[num] = sensor.SI7021_ReadHumidity(&siData[num]);
+    siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData[num]);
+    if (siStatus[num] == SI7021::SI7021_FAILURE) {
+        printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, num);
         siStatus[num] = sensor.SI7021_SoftReset();
-        ThisThread::sleep_for(25);
+        siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
     }
-    if (siStatus[num] == SI7021::SI7021_SUCCESS) {
-        // Start humidity conversion (temp conversion triggered by default)
-        siStatus[num] = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
-        thread_sleep_for(50);
-        siStatus[num] = sensor.SI7021_ReadHumidity(&siData[num]);
-        siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData[num]);
-        if (siStatus[num] == SI7021::SI7021_FAILURE) {
-            printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, num);
-        }
-    }
-    // turn sensors back on
-    for (int j = 0; j<NUM_SENSORS; j++) {
-        sensors[j] = 1;
-    }
-    if (siStatus[num] == SI7021::SI7021_SUCCESS) {
+    else {
         // convert to string and publish
         printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, siData[num].Temperature, siData[num].RelativeHumidity);
         sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", num, siData[num].RelativeHumidity);
@@ -281,6 +293,7 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
         sprintf(temp_str, "%3.2f", siData[num].RelativeHumidity);
         publish(client, topic_str, temp_str, false);
     }
+    all_on_si7021();
 }
 
 bool networking_init(EthernetInterface &wiz) {
@@ -394,9 +407,7 @@ int main(void)
     tick_30sec.attach(&every_30sec, 29.5);
 
     // Switch on all SI7021
-    for(int i=0; i<NUM_SENSORS; i++) {
-        sensors[i] = 1;
-    }
+    all_on_si7021();
 
     // pull high all inputs
     for(int i=0; i<NUM_INPUTS; i++) {
@@ -424,6 +435,15 @@ int main(void)
     printf("%ld: DS1820: Found %d device(s)\n", uptime_sec, num_ds1820);
 
     // Initialise SI7021 temp/humidity sensor
+    for(int i=0; i<NUM_SENSORS; i++) {
+        select_si7021(i);
+        ThisThread::sleep_for(100);
+        siStatus[i] = sensor.SI7021_SoftReset();
+        printf("%ld: SI7021 %d reset success: %d\n", uptime_sec, i, siStatus[i]);
+        ThisThread::sleep_for(50);
+        siStatus[i] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+    }
+    all_on_si7021();
     // siStatus[num] = sensor.SI7021_SoftReset();
     // ThisThread::sleep_for(15);
     // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
