@@ -258,15 +258,19 @@ void all_si7021(bool onoff) {
 void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     char temp_str[6];
     char topic_str[12];
-    if (siStatus[num] == SI7021::SI7021_FAILURE) {
-        printf("%ld: SI7021 %d dead, skipping\n", uptime_sec, num);
-        all_si7021(true);
-        return;
-    }
     select_si7021(num);
     ThisThread::sleep_for(25);
-    // siStatus[num] = sensor.SI7021_SoftReset();
-    // ThisThread::sleep_for(25);
+    if (siStatus[num] == SI7021::SI7021_FAILURE) {
+        siStatus[num] = sensor.SI7021_SoftReset();
+        if (siStatus[num] == SI7021::SI7021_FAILURE) {
+            printf("%ld: SI7021 %d dead, skipping\n", uptime_sec, num);
+            all_si7021(true);
+            return;
+        }
+        else {
+            printf("%ld: SI7021 %d resurrected, amen!\n", uptime_sec, num);
+        }
+    }
     // Start humidity conversion (temp conversion triggered by default)
     siStatus[num] = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
     thread_sleep_for(50);
@@ -274,8 +278,8 @@ void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData);
     if (siStatus[num] == SI7021::SI7021_FAILURE) {
         printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, num);
-        siStatus[num] = sensor.SI7021_SoftReset();
-        siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+        // siStatus[num] = sensor.SI7021_SoftReset();
+        // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
     }
     else {
         // convert to string and publish
