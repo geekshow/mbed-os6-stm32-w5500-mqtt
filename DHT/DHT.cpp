@@ -31,6 +31,7 @@
  */
 
 #include "DHT.h"
+#include "mbed_thread.h"
 
 #define DHT_DATA_BIT_COUNT 40
 
@@ -77,7 +78,7 @@ eError DHT::readData()
     // start the transfer
     DHT_io.output();
     DHT_io = 0;
-    wait_ms(18);
+    thread_sleep_for(18);  // for DHT22 minimum 800µs but for DHT11 etc. 18ms are required
     DHT_io = 1;
     wait_us(30);
     DHT_io.input();
@@ -118,7 +119,7 @@ eError DHT::readData()
     }
 
     // uncomment to see the checksum error if it exists
-    //printf(" 0x%02x + 0x%02x + 0x%02x + 0x%02x = 0x%02x \n", DHT_data[0], DHT_data[1], DHT_data[2], DHT_data[3], DHT_data[4]);
+    // printf(" 0x%02x + 0x%02x + 0x%02x + 0x%02x = 0x%02x \n", DHT_data[0], DHT_data[1], DHT_data[2], DHT_data[3], DHT_data[4]);
     data_valid = DHT_data[0] + DHT_data[1] + DHT_data[2] + DHT_data[3];
     if (DHT_data[4] == data_valid) {
         _lastReadTime = currentTime;
@@ -133,20 +134,28 @@ eError DHT::readData()
 
 }
 
+
+
+
+
 float DHT::CalcTemperature()
 {
-    int v;
+    float v;
 
     switch (_DHTtype) {
         case DHT11:
             v = DHT_data[2];
             return float(v);
         case DHT22:
-            v = DHT_data[2] & 0x7F;
+        // to calculate temperture of DHT22 in Celsius = (DHT_data[2]*256 + DHT_data[3]) / 10
+        // if first bit of DHT_data[2] is 1 then the temperature is negative. 
+        
+        
+            v = DHT_data[2] & 0x7F;  // mask of the bit for negative temperture
             v *= 256;
             v += DHT_data[3];
             v /= 10;
-            if (DHT_data[2] & 0x80)
+            if (DHT_data[2] & 0x80)  // if first bit of DHT_data[2] is 1 then the temperature is negative.  
                 v *= -1;
             return float(v);
     }
@@ -207,13 +216,13 @@ float DHT::ReadTemperature(eScale Scale)
 
 float DHT::CalcHumidity()
 {
-    int v;
-
+    float v;  // needs to be float for DHT22 otherwise only zero after decimal point
     switch (_DHTtype) {
         case DHT11:
             v = DHT_data[0];
             return float(v);
         case DHT22:
+        // to calculate humidity of DHT22 = (DHT_data[0]*256 + DHT_data[1]) / 10
             v = DHT_data[0];
             v *= 256;
             v += DHT_data[1];

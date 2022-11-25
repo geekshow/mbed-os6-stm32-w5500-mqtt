@@ -35,7 +35,6 @@
 
 #include "mbed.h"
 
-typedef enum eType eType;
 enum eType {
     DHT11     = 11,
     SEN11301P = 11,
@@ -47,7 +46,6 @@ enum eType {
     RHT03     = 22
 };
 
-typedef enum eError eError;
 enum eError {
     ERROR_NONE = 0,
     BUS_BUSY,
@@ -59,7 +57,6 @@ enum eError {
     ERROR_NO_PATIENCE
 };
 
-typedef enum eScale eScale;
 enum eScale {
     CELCIUS = 0,
     FARENHEIT,
