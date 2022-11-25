@@ -1,7 +1,8 @@
+#include "DigitalIn.h"
 #include "OLEDDisplayFonts.h"
-#include "SSD1306I2C.h"
+#include "DHT.h"
 #include "DS1820.h"
-#include "SI7021.h"
+#include "SSD1306I2C.h"
 #include "TCPSocketConnection.h"
 #include "ThisThread.h"
 #include "mbed.h"
@@ -12,7 +13,7 @@
 #include "mbed_thread.h"
 #include <cstdio>
 
-#define VERSION "v01 MVHR multi Si7021 bluepill"
+#define VERSION "v01 MVHR multi DHT bluepill"
 #define CONTROLLER_NUM "99"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -30,7 +31,7 @@ bool flag_publish_info;
 bool flag_publish_inputs;
 bool flag_publish_outputs;
 bool flag_read_ds1820;
-bool flag_read_si7021;
+bool flag_read_dht;
 bool flag_update_oled;
 
 enum IO_state {IO_ON, IO_OFF};
@@ -56,12 +57,9 @@ bool input_state[NUM_INPUTS];
 DigitalOut outputs[] = {PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
 
-#define NUM_SENSORS 2
+#define NUM_SENSORS 4
 int sensor_to_read = 0;
-DigitalOut sensors[] = {PB_7, PB_6, PB_5, PB_4}; // switched Vcc on each
-SI7021 sensor(PB_9, PB_8, SI7021::SI7021_ADDRESS, 400000); // common to all sensors
-SI7021::SI7021_vector_data_t siData;
-SI7021::SI7021_status_t siStatus[NUM_SENSORS];
+DHT sensors[NUM_SENSORS] = {DHT(PB_7, DHT22), DHT(PB_6, DHT22), DHT(PB_5, DHT22), DHT(PB_4, DHT22)};
 
 DS1820* temp_probe[MAX_DS1820];
 #define DS1820_DATA_PIN PB_1
@@ -241,59 +239,30 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
     }
 }
 
-void select_si7021(int num) {
-    for (int i = 0; i<NUM_SENSORS; i++) {
-        if (i != num) {
-            sensors[i] = 0;
-        }
-    }
-}
-
-void all_si7021(bool onoff) {
-    for (int i = 0; i<NUM_SENSORS; i++) {
-            sensors[i] = onoff;
-    }
-}
-
-void read_si7021(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
+void read_dht(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     char temp_str[6];
     char topic_str[12];
-    select_si7021(num);
-    ThisThread::sleep_for(25);
-    if (siStatus[num] == SI7021::SI7021_FAILURE) {
-        siStatus[num] = sensor.SI7021_SoftReset();
-        if (siStatus[num] == SI7021::SI7021_FAILURE) {
-            printf("%ld: SI7021 %d dead, skipping\n", uptime_sec, num);
-            all_si7021(true);
-            return;
-        }
-        else {
-            printf("%ld: SI7021 %d resurrected, amen!\n", uptime_sec, num);
-        }
-    }
-    // Start humidity conversion (temp conversion triggered by default)
-    siStatus[num] = sensor.SI7021_TriggerHumidity(SI7021::SI7021_NO_HOLD_MASTER_MODE);
-    thread_sleep_for(50);
-    siStatus[num] = sensor.SI7021_ReadHumidity(&siData);
-    siStatus[num] = sensor.SI7021_ReadTemperatureFromRH(&siData);
-    if (siStatus[num] == SI7021::SI7021_FAILURE) {
-        printf("%ld: SI7021 %d failed humidity/temp conversion :-(\n", uptime_sec, num);
-        // siStatus[num] = sensor.SI7021_SoftReset();
-        // siStatus[num] = sensor.SI7021_Conf(SI7021::SI7021_RESOLUTION_RH_12_TEMP_14, SI7021::SI7021_HTRE_DISABLED);
+    bool err;
+    float temp = 0.0f;
+    float humdity = 0.0f;
+    err = sensors[num].readData();
+    if (err) {
+        printf("%ld: DHT %d failed readData :-(\n", uptime_sec, num);
     }
     else {
+        temp = sensors[num].ReadTemperature(CELCIUS);
+        humdity = sensors[num].ReadHumidity();
         // convert to string and publish
-        printf("%ld: SI7021 %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, siData.Temperature, siData.RelativeHumidity);
-        sprintf(oled_msg_line2, "SI7021 %d = %3.1f%%RH", num, siData.RelativeHumidity);
-        sprintf(oled_msg_line3, "SI7021 %d = %3.2foC", num, siData.Temperature);
+        printf("%ld: DHT %d measures %3.2foC / %3.1f%%RH\n", uptime_sec, num, temp, humdity);
+        sprintf(oled_msg_line2, "DHT %d = %3.1f%%RH", num, humdity);
+        sprintf(oled_msg_line3, "DHT %d = %3.2foC", num, temp);
         sprintf(topic_str, "temp%d", num);
-        sprintf(temp_str, "%3.2f", siData.Temperature);
+        sprintf(temp_str, "%3.2f", temp);
         publish(client, topic_str, temp_str, false);
         sprintf(topic_str, "humdity%d", num);
-        sprintf(temp_str, "%3.2f", siData.RelativeHumidity);
+        sprintf(temp_str, "%3.2f", humdity);
         publish(client, topic_str, temp_str, false);
     }
-    all_si7021(true);
 }
 
 bool networking_init(EthernetInterface &wiz) {
@@ -368,7 +337,7 @@ void every_30sec() {
 void every_15sec() {
     // no waits or blocking routines here please!
     flag_publish_info = true;
-    flag_read_si7021 = true;
+    flag_read_dht = true;
 }
 
 void every_second() {
@@ -405,9 +374,6 @@ int main(void)
     tick_1sec.attach(&every_second, 1.0);
     tick_15sec.attach(&every_15sec, 15.1);
     tick_30sec.attach(&every_30sec, 29.5);
-
-    // Switch on all SI7021
-    all_si7021(true);
 
     // pull high all inputs
     for(int i=0; i<NUM_INPUTS; i++) {
@@ -482,13 +448,13 @@ int main(void)
                     read_ds1820(client);
                     flag_read_ds1820 = false;
                 }
-                else if (flag_read_si7021) {
-                    read_si7021(client, sensor_to_read);
+                else if (flag_read_dht) {
+                    read_dht(client, sensor_to_read);
                     sensor_to_read++;
                     if (sensor_to_read == NUM_SENSORS) {
                         sensor_to_read = 0;
                     }
-                    flag_read_si7021 = false;
+                    flag_read_dht = false;
                 }
                 connected_mqtt = client.isConnected();
             }
