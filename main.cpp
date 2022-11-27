@@ -242,12 +242,18 @@ void read_ds1820(MQTT::Client<MQTTNetwork, Countdown> &client) {
 void read_dht(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
     char temp_str[6];
     char topic_str[12];
-    bool err;
-    float temp = 0.0f;
-    float humdity = 0.0f;
+    int err;
+    float temp;
+    float humdity;
     err = sensors[num].readData();
-    if (err) {
-        printf("%ld: DHT %d failed readData :-(\n", uptime_sec, num);
+    if (err > 0) {
+        printf("%ld: DHT %d failed read: err %d :-(\n", uptime_sec, num, err);
+        sprintf(topic_str, "temp%d", num);
+        sprintf(temp_str, "err %d", err);
+        publish(client, topic_str, temp_str, false);
+        sprintf(topic_str, "humidity%d", num);
+        sprintf(temp_str, "err %d", err);
+        publish(client, topic_str, temp_str, false);
     }
     else {
         temp = sensors[num].ReadTemperature(CELCIUS);
@@ -322,6 +328,7 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     publish_num(client, "inputs", NUM_INPUTS, true);
     publish_num(client, "outputs", NUM_OUTPUTS, true);
     publish_num(client, "ds1820", num_ds1820, true);
+    publish_num(client, "dht", NUM_SENSORS, true);
     conn_failures = 0;   // remember to reset this on success
     return true;
 } 
