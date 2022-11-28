@@ -14,8 +14,8 @@
 #include <cstdio>
 
 #define VERSION "v01 MVHR multi DHT bluepill"
-#define CONTROLLER_NUM "99"
-#define CONTROLLER_NUM_HEX 0x99
+#define CONTROLLER_NAME "mvhr"
+#define CONTROLLER_NUM_HEX 0x05
 #define WATCHDOG_TIMEOUT_MS 9999
 #define LOOP_SLEEP_MS 99
 #define MQTT_KEEPALIVE 20
@@ -41,10 +41,10 @@ Watchdog &wd = Watchdog::get_instance();
 uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, CONTROLLER_NUM_HEX};
 const char* mqtt_broker = "192.168.1.1";
 const int mqtt_port = 1883;
-char* topic_sub = "cmnd/controller" CONTROLLER_NUM "/+";
-char* topic_cmnd = "cmnd/controller" CONTROLLER_NUM "/";
-char* topic_pub = "stat/controller" CONTROLLER_NUM "/";
-char* topic_lwt = "stat/controller" CONTROLLER_NUM "/online";
+char* topic_sub = "cmnd/" CONTROLLER_NAME "/+";
+char* topic_cmnd = "cmnd/" CONTROLLER_NAME "/";
+char* topic_pub = "stat/" CONTROLLER_NAME "/";
+char* topic_lwt = "stat/" CONTROLLER_NAME "/online";
 unsigned long uptime_sec = 0;
 bool connected_net = false;
 bool connected_mqtt = false;
@@ -163,7 +163,7 @@ void update_oled() {
     oled_i2c.clear();
     oled_i2c.setFont(ArialMT_Plain_10);
     // Boilerplate stuff
-    oled_i2c.drawString(0, 0, "Controller" CONTROLLER_NUM);
+    oled_i2c.drawString(0, 0, CONTROLLER_NAME);
     oled_i2c.drawHorizontalLine(0, 12, 128);
     oled_i2c.drawHorizontalLine(0, 54, 128);
     if (uptime_sec < 10) {
@@ -305,7 +305,7 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     conn_data.will = lwt;
     conn_data.MQTTVersion = 3;
     conn_data.keepAliveInterval = MQTT_KEEPALIVE;
-    conn_data.clientID.cstring = (char*)"controller" CONTROLLER_NUM;
+    conn_data.clientID.cstring = (char*)CONTROLLER_NAME;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
         sprintf(oled_msg_line1, "%s", "Couldn't connect MQTT");
@@ -369,8 +369,8 @@ int main(void)
 {
     wd.start(WATCHDOG_TIMEOUT_MS);
 
-    printf("\n===========\n%ld: Welcome! Name: Controller%s\n", uptime_sec, CONTROLLER_NUM);
-    printf("%ld: Version: %s\n===========\n", uptime_sec, VERSION);
+    printf("\n===========\n%ld: Welcome! Controller: %s\n", uptime_sec, CONTROLLER_NAME);
+    printf("%ld: Ver: %s\n===========\n", uptime_sec, VERSION);
     printf("%ld: Inputs: %d Outputs: %d Sensors: %d\n", uptime_sec, NUM_INPUTS, NUM_OUTPUTS, NUM_SENSORS);
     EthernetInterface wiz(PB_15, PB_14, PB_13, PB_12, PB_11); // SPI2 with PB_11 reset
 
