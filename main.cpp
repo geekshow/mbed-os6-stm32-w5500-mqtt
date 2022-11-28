@@ -265,7 +265,7 @@ void read_dht(MQTT::Client<MQTTNetwork, Countdown> &client, int num) {
         sprintf(topic_str, "temp%d", num);
         sprintf(temp_str, "%3.2f", temp);
         publish(client, topic_str, temp_str, false);
-        sprintf(topic_str, "humdity%d", num);
+        sprintf(topic_str, "humidity%d", num);
         sprintf(temp_str, "%3.2f", humdity);
         publish(client, topic_str, temp_str, false);
     }
