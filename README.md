@@ -11,8 +11,6 @@ https://os.mbed.com/users/hudakz/code/mbed-os-bluepill/
 ## To Do
 
 - decrease loop timeout if required
-- add i2c OLED
-- add rotational encoder
 
 ## BluePill board (STM32F103C8)
 
