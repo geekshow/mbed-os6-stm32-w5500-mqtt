@@ -47,9 +47,9 @@ bool connected_net = false;
 bool connected_mqtt = false;
 uint8_t conn_failures = 0;
 
-#define NUM_IO 1
-#define NUM_INPUTS 8
-PCF8574* io[NUM_IO] =  {new PCF8574(PB_9, PB_8, PCF8574::PCF8574A_ADDRESS_0, 400000)};
+#define NUM_IO 2
+#define NUM_INPUTS 16
+PCF8574* io[NUM_IO] =  {new PCF8574(PB_9, PB_8, PCF8574::PCF8574A_ADDRESS_0, 400000), new PCF8574(PB_9, PB_8, PCF8574::PCF8574A_ADDRESS_1, 400000)};
 PCF8574::PCF8574_vector_data_t   ioData;
 PCF8574::PCF8574_status_t  ioStatus;
 char input_state[NUM_IO];
