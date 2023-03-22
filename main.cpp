@@ -1,6 +1,7 @@
 #include "OLEDDisplayFonts.h"
 #include "SSD1306I2C.h"
 #include "DS1820.h"
+#include "PCF8574.h"
 #include "TCPSocketConnection.h"
 #include "mbed.h"
 #include "EthernetInterface.h"
@@ -10,7 +11,7 @@
 #include "mbed_thread.h"
 #include <cstdio>
 
-#define VERSION "v03 IO OLED DS1820 SSR bluepill"
+#define VERSION "v01 PCF IO OLED DS1820"
 #define CONTROLLER_NAME "test"
 #define CONTROLLER_NUM_HEX 0x99
 #define WATCHDOG_TIMEOUT_MS 9999
@@ -46,9 +47,12 @@ bool connected_net = false;
 bool connected_mqtt = false;
 uint8_t conn_failures = 0;
 
-#define NUM_INPUTS 9
-DigitalIn inputs[] = {PA_0, PA_1, PA_2, PA_3, PA_4, PA_5, PA_6, PA_7, PB_0};
-bool input_state[NUM_INPUTS];
+#define NUM_IO 1
+#define NUM_INPUTS 8
+PCF8574* io[NUM_IO] =  {new PCF8574(PB_9, PB_8, PCF8574::PCF8574A_ADDRESS_0, 400000)};
+PCF8574::PCF8574_vector_data_t   ioData;
+PCF8574::PCF8574_status_t  ioStatus;
+char input_state[NUM_IO];
 #define NUM_OUTPUTS 11
 DigitalOut outputs[] = {PB_7, PB_6, PB_5, PB_4, PB_3, PA_15, PA_12, PA_11, PA_10, PA_9, PA_8};
 DigitalOut led(PC_13);
@@ -135,10 +139,13 @@ bool publish_info(MQTT::Client<MQTTNetwork, Countdown> &client) {
 }
 
 void publish_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
-    for (int i=0; i<NUM_INPUTS; i++) {
-        char topic_str[8]; // long enough string for inputxx
-        sprintf(topic_str, "input%d", i);
-        publish_num(client, topic_str, input_state[i]);
+    for (int i=0; i<NUM_IO; i++) {      // loop through each IO card
+        for (int j=0; j<8; j++) {        // loop through each bit
+            bool inp = input_state[i] & 1 << j;
+            char topic_str[8]; // long enough string for inputxx
+            sprintf(topic_str, "input%d", j + (i * 8));
+            publish_num(client, topic_str, inp);
+        }
     }
 }
 
@@ -190,16 +197,24 @@ void update_oled() {
 
 
 void read_inputs(MQTT::Client<MQTTNetwork, Countdown> &client) {
-    for (int i=0; i<NUM_INPUTS; i++) {
-        bool old_state = input_state[i];    // save old state
-        input_state[i] = inputs[i];         // read new value
-        if(input_state[i] != old_state) {
-            // input has changed state
-            printf("%ld: Input %d changed to %d\n", uptime_sec, i, input_state[i]);
-            sprintf(oled_msg_line1, "Input %d changed to %d", i, input_state[i]);
-            char topic_str[8]; // long enough string for inputxx
-            sprintf(topic_str, "input%d", i);
-            publish_num(client, topic_str, input_state[i]);
+    for (int i=0; i<NUM_IO; i++) {         // for each IO card
+        ioStatus = io[i]->PCF8574_ReadPins(&ioData);
+        char old_io_state = input_state[i];  // save old IO state
+        input_state[i] = ioData.data;        // grab new IO value
+        if(input_state[i] != old_io_state) {
+            for (int j=0; j<8; j++) {        // loop through each bit
+                bool new_state = input_state[i] & 1 << j;
+                bool old_state = old_io_state & 1 << j;
+                if(new_state != old_state) {
+                    // input has changed state
+                    int inp_num = j + (i * 8);
+                    printf("%ld: Input %d changed to %d\n", uptime_sec, inp_num, new_state);
+                    sprintf(oled_msg_line1, "Input %d changed to %d", inp_num, new_state);
+                    char topic_str[8]; // long enough string for inputxx
+                    sprintf(topic_str, "input%d", inp_num);
+                    publish_num(client, topic_str, new_state);
+                }
+            }
         }
     }
 }
@@ -340,11 +355,6 @@ int main(void)
     tick_15sec.attach(&every_15sec, 15.1);
     tick_30sec.attach(&every_30sec, 29.5);
 
-    // pull high all inputs
-    for(int i=0; i<NUM_INPUTS; i++) {
-        inputs[i].mode(PullUp);
-        input_state[i] = 1;
-    }
     //pulse all outputs
     for(int i=0; i<NUM_OUTPUTS; i++) {
         outputs[i] = 1;
