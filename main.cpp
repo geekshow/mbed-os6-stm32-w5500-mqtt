@@ -37,10 +37,13 @@ Watchdog &wd = Watchdog::get_instance();
 uint8_t mac_addr[6]={0x00, 0x00, 0x00, 0xBE, 0xEF, CONTROLLER_NUM_HEX};
 const char* mqtt_broker = "192.168.1.1";
 const int mqtt_port = 1883;
-char* topic_sub = "cmnd/" CONTROLLER_NAME "/+";
-char* topic_cmnd = "cmnd/" CONTROLLER_NAME "/";
-char* topic_pub = "stat/" CONTROLLER_NAME "/";
-char* topic_lwt = "stat/" CONTROLLER_NAME "/online";
+char const *topic_sub = "cmnd/" CONTROLLER_NAME "/+";
+char const *topic_cmnd = "cmnd/" CONTROLLER_NAME "/";
+char const *topic_pub = "stat/" CONTROLLER_NAME "/";
+char lwt_topic[] = "stat/" CONTROLLER_NAME "/online";
+char lwt_msg[] = "0";
+char mqtt_clientid[] = CONTROLLER_NAME;
+
 unsigned long uptime_sec = 0;
 bool connected_net = false;
 bool connected_mqtt = false;
@@ -107,11 +110,11 @@ bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* ms
     msg.qos = MQTT::QOS1;
     msg.retained = retained;
     msg.payloadlen = strlen(msg_payload);
-    msg.payload = (char*)msg_payload;
+    msg.payload = msg_payload;
     char topic_full[30];
     strcat(topic_full, topic_pub);
     strcat(topic_full, topic);
-    // printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg.payload, topic_full);
+    printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg_payload, topic_full);
     if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
         printf("%ld: Publish Error! (topic:%s msg:%s)\n", uptime_sec, topic, msg_payload);
         sprintf(oled_msg_line1, "%s", "MQTT Publish error! :-(");
@@ -258,14 +261,14 @@ bool mqtt_init(MQTTNetwork &mqttNet, MQTT::Client<MQTTNetwork, Countdown> &clien
     // Client connect to broker
     MQTTPacket_connectData conn_data = MQTTPacket_connectData_initializer;
     MQTTPacket_willOptions lwt = MQTTPacket_willOptions_initializer;
-    lwt.topicName.cstring = topic_lwt;
-    lwt.message.cstring = (char*)"0";
+    lwt.topicName.cstring = lwt_topic;
+    lwt.message.cstring = lwt_msg;
     lwt.retained = true;
     conn_data.willFlag = 1;
     conn_data.will = lwt;
     conn_data.MQTTVersion = 3;
     conn_data.keepAliveInterval = MQTT_KEEPALIVE;
-    conn_data.clientID.cstring = (char*)CONTROLLER_NAME;
+    conn_data.clientID.cstring = mqtt_clientid;
     if (client.connect(conn_data) != MQTT::SUCCESS) {
         printf("%ld: MQTT Client couldn't connect to broker %s :-(\n", uptime_sec, mqtt_broker);
         sprintf(oled_msg_line1, "%s", "Couldn't connect MQTT");
