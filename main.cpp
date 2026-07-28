@@ -69,55 +69,40 @@ char oled_msg_line3[25];
 
 void message_handler(MQTT::MessageData& md)
 {
-    // MQTT callback function
     MQTT::Message &message = md.message;
-    char topic[md.topicName.lenstring.len + 1];
-    sprintf(topic, "%.*s", md.topicName.lenstring.len, md.topicName.lenstring.data);
-    char* payload = new char[message.payloadlen + 1];
-    sprintf(payload, "%.*s", message.payloadlen, (char*)message.payload);
-    // printf("%ld: DEBUG: Received: %s Msg: %s qos %d, retained %d, dup %d, packetid %d\n", uptime_sec, topic, payload, message.qos, message.retained, message.dup, message.id);
-    char* sub_topic = topic + strlen(topic_cmnd);  // find the last word of the topic (eg: cmnd/controller00/output2)
-    if (!strncmp(sub_topic, "output", 6)) {
-        // output# command received
-        char* output_num_str = sub_topic + 6;
-        int8_t output_num = atoi(output_num_str);
-        if (output_num < 0 || output_num >= NUM_OUTPUTS) {
-            printf("%ld: Error: unknown output number: %d\n", uptime_sec, output_num);
-            return;
-        }
-        if (!strncmp(payload, "1", 1)) {
-            printf("%ld: Turning output %d ON\n", uptime_sec, output_num);
-            sprintf(oled_msg_line2, "Output %d ON", output_num);
-            outputs[output_num] = 1;
-            flag_publish_outputs = true;
-        }
-        else if (!strncmp(payload, "0", 1)) {
-            printf("%ld: Turning output %d OFF\n", uptime_sec, output_num);
-            sprintf(oled_msg_line2, "Output %d OFF", output_num);
-            outputs[output_num] = 0;
-            flag_publish_outputs = true;
-        }
-        else {
-            printf("%ld: Error: unknown output command: %s\n", uptime_sec, payload);
-            return;
-        }
-    }
+    char topic[64] = {0};
+    char payload[128] = {0};
+
+    int topic_len = md.topicName.lenstring.len;
+    int payload_len = message.payloadlen;
+
+    if (topic_len > 63) topic_len = 63;
+    if (payload_len > 127) payload_len = 127;
+
+    memcpy(topic, md.topicName.lenstring.data, topic_len);
+    memcpy(payload, message.payload, payload_len);
+    topic[topic_len] = '\0';
+    payload[payload_len] = '\0';
+
+    // handle command
 }
 
 bool publish(MQTT::Client<MQTTNetwork, Countdown> &client, char* topic, char* msg_payload, bool retained = false) {
-    // main function to publish MQTT messages
+    char topic_full[64] = {0};
+    int n = snprintf(topic_full, sizeof(topic_full), "%s%s", topic_pub, topic);
+    if (n < 0 || n >= (int)sizeof(topic_full)) {
+        printf("%ld: topic too long\n", uptime_sec);
+        return false;
+    }
+
     MQTT::Message msg;
     msg.qos = MQTT::QOS1;
     msg.retained = retained;
     msg.payloadlen = strlen(msg_payload);
     msg.payload = msg_payload;
-    char topic_full[30];
-    strcat(topic_full, topic_pub);
-    strcat(topic_full, topic);
-    printf("%ld: DEBUG: Publishing: %s to: %s\n", uptime_sec, msg_payload, topic_full);
+
     if (client.publish(topic_full, msg) != MQTT::SUCCESS) {
         printf("%ld: Publish Error! (topic:%s msg:%s)\n", uptime_sec, topic, msg_payload);
-        sprintf(oled_msg_line1, "%s", "MQTT Publish error! :-(");
         return false;
     }
     return true;
